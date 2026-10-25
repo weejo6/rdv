@@ -15,7 +15,7 @@ export function fmtDistance(km: number): string {
   const m = Math.round((km * 1000) / 50) * 50;
   if (m < 1000) return `${Math.max(50, m)} m`;
   if (km < 10) return `${km.toFixed(1).replace('.', ',')} km`;
-  return `${Math.round(km)} km`;
+  return `${Math.round(km).toLocaleString('fr-FR')} km`;
 }
 
 export function offsetKm(p: LatLng, northKm: number, eastKm: number): LatLng {

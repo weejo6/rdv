@@ -89,15 +89,23 @@ function seedPlace(tpl: SeedTpl, ctx: SeedContext, used: Set<string>): Place | n
   return { ...randomAround(ctx.center, dist[0], Math.min(dist[1], 6)), label: tpl.generic ?? pick(GENERIC_SPOTS) };
 }
 
-function buildSeed(tpl: SeedTpl, ctx: SeedContext, now: number, used: Set<string>): RdvEvent | null {
+function buildSeed(
+  tpl: SeedTpl,
+  ctx: SeedContext,
+  now: number,
+  used: Set<string>,
+  background: boolean,
+): RdvEvent | null {
   const place = seedPlace(tpl, ctx, used);
   if (!place) return null;
   const local = !!ctx.city;
   const title = !local && tpl.alt ? tpl.alt.title : tpl.title;
   const description = !local && tpl.alt ? tpl.alt.description : tpl.description;
   const organizerId = tpl.mine ? 'me' : pick(PEOPLE).id;
-  const maxJoined = tpl.capacity - tpl.present - 1 - (tpl.meJoined ? 1 : 0);
-  const sims = pickParticipants(Math.min(tpl.joined, maxJoined), [organizerId]);
+  // Dans une zone d'arrière-plan (une autre ville), tu n'es inscrit à rien.
+  const meJoined = tpl.meJoined && !background;
+  const maxJoined = tpl.capacity - tpl.present - 1 - (meJoined ? 1 : 0);
+  const sims = pickParticipants(Math.min(tpl.joined + (tpl.meJoined && background ? 1 : 0), maxJoined), [organizerId]);
   const startAt =
     tpl.kind === 'live' ? now - (tpl.startedMinAgo ?? 0) * MIN : tpl.when ? resolveWhen(tpl.when, now) : undefined;
 
@@ -110,7 +118,7 @@ function buildSeed(tpl: SeedTpl, ctx: SeedContext, now: number, used: Set<string
     description,
     capacity: tpl.capacity,
     alreadyPresent: tpl.present,
-    participants: tpl.meJoined ? ['me', ...sims] : sims,
+    participants: meJoined ? ['me', ...sims] : sims,
     place,
     startAt,
     recurrence: tpl.recurrence,
@@ -121,7 +129,7 @@ function buildSeed(tpl: SeedTpl, ctx: SeedContext, now: number, used: Set<string
     media: [],
     // Quelques organisateurs fictifs ne confirmeront pas leur RDV (annulation automatique).
     sim:
-      !tpl.mine && !tpl.meJoined && tpl.kind !== 'live' && chance(0.08)
+      !tpl.mine && !meJoined && tpl.kind !== 'live' && chance(0.08)
         ? { willCancel: chance(0.5) ? 'j1' : 'h1' }
         : undefined,
     demoSeed: tpl.mine || undefined,
@@ -130,16 +138,23 @@ function buildSeed(tpl: SeedTpl, ctx: SeedContext, now: number, used: Set<string
   return e;
 }
 
-/** Génère le monde de départ autour d'un centre. */
-export function seedWorld(ctx: SeedContext, now: number, opts: { includeMine: boolean }): Record<string, RdvEvent> {
+/**
+ * Génère les RDV de départ d'une zone.
+ * `home` : ta zone (avec ton tournoi de démo et tes inscriptions) ; sinon zone d'arrière-plan.
+ */
+export function seedWorld(
+  ctx: SeedContext,
+  now: number,
+  opts: { home: boolean; areaId: string },
+): Record<string, RdvEvent> {
   // Hors ville faite main, on réutilise les modèles de Grenoble qui savent s'adapter (types de lieux).
   const templates = ctx.city ? ctx.city.seeds : GRENOBLE_REGION.seeds.filter((t) => t.spots);
   const out: Record<string, RdvEvent> = {};
   const used = new Set<string>();
   for (const tpl of templates) {
-    if (tpl.mine && !opts.includeMine) continue;
-    const e = buildSeed(tpl, ctx, now, used);
-    if (e) out[e.id] = e;
+    if (tpl.mine && !opts.home) continue;
+    const e = buildSeed(tpl, ctx, now, used, !opts.home);
+    if (e) out[e.id] = { ...e, areaId: opts.areaId };
   }
   return out;
 }

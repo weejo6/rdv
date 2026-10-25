@@ -26,7 +26,7 @@ export function MapView({ drawerOpen }: { drawerOpen: boolean }) {
   const selectedId = useStore((s) => s.selectedId);
   const now = useNow((s) => s.now);
 
-  const items = useMemo(() => mapItems(events, filters, myPos, now, Date.now()), [events, filters, myPos, now]);
+  const items = useMemo(() => mapItems(events, filters, now, Date.now()), [events, filters, now]);
 
   return (
     <MapContainer
@@ -74,6 +74,7 @@ function MapController({ drawerOpen }: { drawerOpen: boolean }) {
   const flyTarget = useStore((s) => s.flyTarget);
   const select = useStore((s) => s.select);
   const openCreate = useStore((s) => s.openCreate);
+  const setView = useStore((s) => s.setView);
 
   useEffect(() => {
     mapRef.current = map;
@@ -81,6 +82,20 @@ function MapController({ drawerOpen }: { drawerOpen: boolean }) {
       mapRef.current = null;
     };
   }, [map]);
+
+  // La zone affichée sert à la liste « Dans cette zone » et au compteur.
+  useEffect(() => {
+    const update = () => {
+      const b = map.getBounds();
+      const c = map.getCenter();
+      setView({ center: { lat: c.lat, lng: c.lng }, bounds: [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()] });
+    };
+    update();
+    map.on('moveend', update);
+    return () => {
+      map.off('moveend', update);
+    };
+  }, [map, setView]);
 
   useMapEvents({
     click: () => {

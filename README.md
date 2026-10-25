@@ -24,9 +24,11 @@ du Canada, et à Grenoble sinon.
 ## Fonctionnalités
 
 ### La carte
-- Carte interactive (OpenStreetMap) centrée sur ta position.
+- Carte interactive (OpenStreetMap) centrée sur ta position ; elle affiche tous les RDV de la zone visible.
 - Chaque RDV est une épingle colorée avec son emoji et le **nombre de places restantes**.
-- Filtres par type, catégorie, rayon (1 à 100 km) et recherche texte. Vue liste triée par distance ou horaire.
+- **Recherche** : villes de démo, RDV, et n'importe quel lieu (ville, adresse, parc…). Choisir un lieu y emmène
+  la carte ; s'il n'y a encore rien, des RDV de démo y sont générés sur les vrais lieux du coin.
+- Filtres par type et catégorie. Liste des RDV de la zone affichée, triée par distance ou horaire.
 - **Un événement complet disparaît de la carte** (avec une petite animation). Il reste visible dans « Mes RDV ».
 
 ### Trois types d'événements

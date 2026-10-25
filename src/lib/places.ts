@@ -1,6 +1,7 @@
 import type { LatLng, Place } from '../types';
 import { distanceKm } from './geo';
 import { pick } from './random';
+import { fetchWithTimeout, markPhotonDown, photonAvailable } from './services';
 
 /**
  * Vrais lieux autour de l'utilisateur, tirés d'OpenStreetMap via l'API Photon (komoot) :
@@ -83,10 +84,8 @@ async function fetchGroup(center: LatLng, g: (typeof GROUPS)[number]): Promise<P
     lang: 'fr',
   });
   g.tags.forEach((t) => params.append('osm_tag', t));
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
-    const res = await fetch(`${PHOTON_REVERSE}?${params}`, { signal: ctrl.signal });
+    const res = await fetchWithTimeout(`${PHOTON_REVERSE}?${params}`, 6000);
     if (!res.ok) return null;
     const data = (await res.json()) as { features?: PhotonFeature[] };
     const out: PoolPlace[] = [];
@@ -108,8 +107,6 @@ async function fetchGroup(center: LatLng, g: (typeof GROUPS)[number]): Promise<P
     return out;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -125,12 +122,16 @@ function isRealLake(name: string, extent?: [number, number, number, number]) {
 }
 
 async function fromPhoton(center: LatLng): Promise<PoolPlace[] | null> {
+  if (!photonAvailable()) return null;
   const all: PoolPlace[] = [];
   for (let i = 0; i < GROUPS.length; i++) {
     if (i > 0) await delay(1000);
     const res = await fetchGroup(center, GROUPS[i]);
-    // Si le service ne répond pas dès la première requête, on n'insiste pas.
-    if (res === null && i === 0) return null;
+    // Si le service ne répond pas dès la première requête, on n'insiste pas (et on le met de côté).
+    if (res === null && i === 0) {
+      markPhotonDown();
+      return null;
+    }
     if (res) all.push(...res);
   }
   return all;

@@ -4,7 +4,7 @@ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-lea
 import { LoaderCircle, LocateFixed, Search } from 'lucide-react';
 import type { Place } from '../types';
 import { useStore } from '../store/store';
-import { reverseGeocode, searchPlaces, type GeoResult } from '../lib/geocode';
+import { findPlaces, reverseGeocode, suggestPlaces, type GeoResult } from '../lib/geocode';
 import { TILE_ATTRIBUTION, TILE_URL } from './MapView';
 import { pickerIcon } from './markerIcons';
 
@@ -65,7 +65,7 @@ export function LocationPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Recherche d'adresse (avec un petit délai pendant la frappe).
+  // Suggestions pendant la frappe (avec un petit délai).
   useEffect(() => {
     const q = query.trim();
     if (q.length < 3) {
@@ -75,11 +75,9 @@ export function LocationPicker({
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       setSearching(true);
-      try {
-        setResults(await searchPlaces(q, myPos, ctrl.signal));
-      } catch {
-        /* recherche annulée ou hors ligne */
-      } finally {
+      const found = await suggestPlaces(q, value, ctrl.signal);
+      if (!ctrl.signal.aborted) {
+        if (found) setResults(found);
         setSearching(false);
       }
     }, 450);
@@ -87,7 +85,23 @@ export function LocationPicker({
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [query, myPos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  /** Entrée : recherche complète (avec le service de secours si besoin). */
+  const searchNow = async () => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    setSearching(true);
+    const found = await findPlaces(q, value);
+    setSearching(false);
+    if (found.length === 1) {
+      void moveTo(found[0].lat, found[0].lng, found[0].label);
+      setQuery('');
+      setResults([]);
+    } else setResults(found);
+    if (!found.length) toast({ tone: 'warn', title: 'Aucun lieu trouvé', body: `Rien pour « ${q} ».` });
+  };
 
   const locate = () => {
     if (posMode === 'demo' || !navigator.geolocation) {
@@ -118,7 +132,13 @@ export function LocationPicker({
           className="input input--icon"
           value={query}
           onChange={(ev) => setQuery(ev.target.value)}
-          placeholder="Rechercher une adresse ou un lieu…"
+          onKeyDown={(ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              void searchNow();
+            }
+          }}
+          placeholder="Rechercher une adresse ou un lieu (Entrée)…"
         />
         {searching && <LoaderCircle size={16} className="spin picker__spinner" />}
         {results.length > 0 && (

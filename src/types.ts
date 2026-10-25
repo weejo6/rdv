@@ -81,6 +81,8 @@ export interface RdvEvent {
   sim?: { willCancel?: 'j1' | 'h1' };
   /** RDV « à toi » fourni par la démo (et non créé par toi). */
   demoSeed?: boolean;
+  /** Zone de démo qui a généré ce RDV (absent pour les RDV que tu crées). */
+  areaId?: string;
 }
 
 export type NotifKind =
@@ -111,6 +113,10 @@ export interface Notif {
 export interface Filters {
   kinds: EventKind[];
   categories: CategoryId[];
-  radiusKm: number;
-  query: string;
+}
+
+/** Zone visible de la carte : [sud, ouest, nord, est]. */
+export interface MapViewState {
+  center: LatLng;
+  bounds: [number, number, number, number];
 }
