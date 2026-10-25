@@ -1,0 +1,11 @@
+{
+  "name": "RDV · Rendez-vous",
+  "short_name": "RDV",
+  "description": "Crée, visualise et rejoins les rendez-vous autour de toi.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F1F5F9",
+  "theme_color": "#FF5A36",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
