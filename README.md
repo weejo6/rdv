@@ -7,8 +7,17 @@
 L'app est une démo de présentation : tout tourne dans le navigateur, avec des habitants et des
 événements simulés **autour de ta position**, placés sur les vrais lieux de ton quartier (parcs, terrains,
 places, bars, cinémas, sommets, lacs…) trouvés dans OpenStreetMap.
-Si la géolocalisation est refusée, la démo se déroule à Grenoble, avec des lieux choisis à la main
-(Parc Paul Mistral, Bastille, Col de la Croix de Fer…).
+Deux villes ont en plus du contenu fait main :
+- **Grenoble** : Parc Paul Mistral, Bastille, Col de la Croix de Fer…
+- **Montréal** : tam-tams du Mont-Royal, 5 à 7 jeux de société, dek hockey au parc Jarry, belvédère Kondiaronk,
+  marché Jean-Talon, mont Saint-Bruno…
+
+Lien direct vers une ville, même sans géolocalisation :
+- https://weejo6.github.io/rdv/?ville=montreal
+- https://weejo6.github.io/rdv/?ville=grenoble
+
+Si la géolocalisation est refusée, la démo se déroule à Montréal pour un navigateur réglé sur l'heure de l'Est
+du Canada, et à Grenoble sinon.
 
 ---
 
@@ -49,7 +58,7 @@ Astuce : **clic droit (ou appui long) sur la carte** pour créer un RDV à cet e
 - Panneau **« Démo »** : avancer le temps (+15 min, +1 h, +1 jour), accélérer l'horloge (x60, x600),
   sauter directement à J-1 / H-1 / au début de ton prochain RDV pour montrer les confirmations et l'annulation automatique,
   déclencher manuellement des inscriptions, désinscriptions et lives, réinitialiser la démo.
-- Position : « Ma position » (par défaut) ou « Grenoble » (lieux faits main), dans le panneau Démo.
+- Position : « Ma position » (par défaut), « Grenoble » ou « Montréal », dans le panneau Démo.
 
 Les données (dont les photos et vidéos) sont sauvegardées dans le navigateur (IndexedDB).
 
@@ -79,7 +88,8 @@ Les données (dont les photos et vidéos) sont sauvegardées dans le navigateur 
 ```
 src/
 ├── components/   Interface : carte, panneaux, fiche événement, formulaire de création…
-├── lib/          Logique pure : temps, statuts, géo, données de démo, formatage
+├── lib/          Logique pure : temps, statuts, géo, lieux réels, génération des RDV, formatage
+│   └── regions/  Contenu fait main par ville (Grenoble, Montréal)
 ├── sim/          Boucle de simulation (horloge + habitants fictifs)
 ├── store/        État global (Zustand) : événements, notifications, annulations automatiques
 └── styles.css

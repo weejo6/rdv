@@ -1,0 +1,260 @@
+import { spot, type Region } from './types';
+
+/**
+ * Grenoble : contenu de démo fait main.
+ * Ses modèles servent aussi, avec leurs variantes « alt », à générer des RDV n'importe où.
+ */
+export const GRENOBLE_REGION: Region = {
+  id: 'grenoble',
+  name: 'Grenoble',
+  center: { lat: 45.1885, lng: 5.7245 },
+  cityRadiusKm: 3,
+  regionRadiusKm: 40,
+  home: { lat: 45.1892, lng: 5.7246, label: 'Place Victor Hugo, Grenoble' },
+
+  places: {
+    paulMistral: spot(45.1858, 5.7362, 'Parc Paul Mistral', 'park'),
+    paulMistralKiosque: spot(45.1869, 5.7331, 'Parc Paul Mistral · pelouse nord', 'park'),
+    paulMistralStade: spot(45.1838, 5.7392, 'Parc Paul Mistral · city stade', 'pitch'),
+    jardinDeVille: spot(45.1926, 5.7297, 'Jardin de Ville', 'park'),
+    bastille: spot(45.1987, 5.7253, 'Fort de la Bastille', 'view'),
+    quaiJay: spot(45.1942, 5.7236, 'Quai Stéphane Jay', 'square'),
+    notreDame: spot(45.1929, 5.7318, 'Place Notre-Dame', 'square'),
+    saintAndre: spot(45.1924, 5.7283, 'Place Saint-André', 'bar'),
+    grenette: spot(45.1903, 5.7276, 'Place Grenette', 'square'),
+    sainteClaire: spot(45.1913, 5.7306, 'Halle Sainte-Claire', 'market'),
+    ileVerte: spot(45.1985, 5.744, "Berges de l'Isère · Île Verte", 'park'),
+    villeneuve: spot(45.1633, 5.7352, 'Parc Jean Verlhac · Villeneuve', 'park'),
+    campus: spot(45.1932, 5.7685, 'Domaine universitaire · Saint-Martin-d’Hères', 'pitch'),
+    melies: spot(45.1838, 5.7213, 'Cinéma Le Méliès', 'cinema'),
+    deBonne: spot(45.1848, 5.7223, 'Parc de la Caserne de Bonne', 'park'),
+    championnet: spot(45.1873, 5.7218, 'Place Championnet', 'bar'),
+    anneau: spot(45.1829, 5.7425, 'Anneau de vitesse · Parc Paul Mistral', 'pitch'),
+    jardinPlantes: spot(45.1862, 5.7318, 'Jardin des Plantes', 'park'),
+    musee: spot(45.195, 5.7325, 'Musée de Grenoble', 'museum'),
+    esplanade: spot(45.1962, 5.7143, 'Esplanade de la Porte de France', 'square'),
+    gare: spot(45.1913, 5.7147, 'Parvis de la gare', 'square'),
+    chamrousse: spot(45.1255, 5.8775, 'Chamrousse 1650 · départ des lacs Robert', 'peak'),
+    stNizier: spot(45.1697, 5.6337, 'Saint-Nizier-du-Moucherotte', 'peak'),
+    sassenage: spot(45.2048, 5.6632, 'Sassenage · place de la mairie', 'square'),
+    laffrey: spot(45.0215, 5.7742, 'Grand lac de Laffrey', 'water'),
+    colDePorte: spot(45.293, 5.77, 'Col de Porte · Chartreuse', 'peak'),
+    croixDeFer: spot(45.2271, 6.2013, 'Col de la Croix de Fer', 'peak'),
+  },
+
+  urbanSpots: [
+    'paulMistral', 'paulMistralKiosque', 'paulMistralStade', 'jardinDeVille', 'quaiJay', 'notreDame',
+    'saintAndre', 'grenette', 'ileVerte', 'villeneuve', 'campus', 'deBonne', 'championnet', 'anneau',
+    'jardinPlantes', 'esplanade', 'gare',
+  ],
+
+  seeds: [
+    {
+      title: 'Partie de loup-garou', emoji: '🐺', kind: 'event', category: 'jeux',
+      place: 'paulMistralKiosque', spots: ['park'], generic: 'Parc du quartier', dist: [0.5, 1.5],
+      capacity: 10, present: 4, joined: 3, when: { weekday: 0, time: '14:00' }, durationMin: 150,
+      description: "On se retrouve sur la pelouse pour quelques parties de loup-garou. J'apporte les cartes et je fais le maître du jeu, débutants bienvenus ! 🐺🌕",
+    },
+    {
+      title: 'Tour en vélo · Col de la Croix de Fer', emoji: '🚴', kind: 'event', category: 'sport',
+      place: 'croixDeFer', spots: ['peak', 'view', 'water'], generic: 'Col', dist: [25, 40],
+      alt: {
+        title: 'Grande sortie vélo',
+        description: 'Sortie vélo à la journée avec une belle montée au programme. Rythme cool, on se regroupe au sommet pour la photo. Casque obligatoire, covoiturage possible.',
+        dist: [8, 30],
+      },
+      capacity: 5, present: 2, joined: 1, when: { weekday: 6, time: '08:00' }, durationMin: 360,
+      description: 'Montée depuis Allemond : 27 km et ~1 500 m de D+. Rythme cool, on se regroupe au sommet pour la photo et un chocolat chaud. Casque obligatoire, covoiturage possible depuis Grenoble.',
+    },
+    {
+      title: 'Loup-garou du dimanche', emoji: '🐺', kind: 'regular', category: 'jeux',
+      place: 'jardinDeVille', spots: ['park'], generic: 'Jardin public', dist: [0.3, 1.2],
+      capacity: 12, present: 3, joined: 4, recurrence: { weekdays: [0], time: '14:00' }, durationMin: 180,
+      description: 'Chaque dimanche après-midi : loup-garou géant avec rôles spéciaux (sorcière, cupidon, chasseur…). Maître du jeu expérimenté, ambiance bon enfant.',
+    },
+    {
+      title: 'Foot à 5', emoji: '⚽', kind: 'live', category: 'sport',
+      place: 'paulMistralStade', spots: ['pitch', 'park'], generic: 'City stade', dist: [0.4, 1.5],
+      capacity: 10, present: 7, joined: 0, startedMinAgo: 8, durationMin: 90,
+      description: 'On est 7 sur le terrain, il manque 3 joueurs pour faire du 5 contre 5 ! Venez comme vous êtes 😄',
+    },
+    {
+      title: 'Running du soir', emoji: '🏃', kind: 'regular', category: 'sport',
+      place: 'quaiJay', spots: ['park', 'water'], generic: 'Berges de la rivière', dist: [0.4, 2],
+      capacity: 20, present: 4, joined: 7, meJoined: true, recurrence: { weekdays: [2, 4], time: '19:00' }, durationMin: 60,
+      description: 'Footing de 8 km, allure ~6 min/km. Tous niveaux : on attend tout le monde au retour !',
+    },
+    {
+      title: 'Jam session acoustique', emoji: '🎸', kind: 'event', category: 'musique',
+      place: 'notreDame', spots: ['square', 'park'], generic: 'Place de l’église', dist: [0.3, 1.2],
+      capacity: 8, present: 3, joined: 2, when: { inMinutes: 50 }, durationMin: 120,
+      description: 'Guitares, cajón, ukulélé… Viens avec ton instrument ou juste ta voix ! Répertoire folk / pop, on improvise beaucoup.',
+    },
+    {
+      title: 'Coucher de soleil à la Bastille', emoji: '🌄', kind: 'event', category: 'nature',
+      place: 'bastille', spots: ['view', 'peak', 'park'], generic: 'Belvédère', dist: [1, 3],
+      alt: {
+        title: 'Coucher de soleil au belvédère',
+        description: "Petite montée à pied jusqu'au point de vue, puis apéro face au coucher de soleil. Prévois une frontale pour la descente !",
+        dist: [0.5, 12],
+      },
+      capacity: 15, present: 2, joined: 6, when: { daysAhead: 1, time: '17:15' }, durationMin: 120,
+      description: 'Montée à pied par le jardin des Dauphins (45 min), puis apéro face au Vercors. Prévois une frontale pour la descente !',
+    },
+    {
+      title: 'Apéro jeux de société', emoji: '🎲', kind: 'regular', category: 'jeux',
+      place: 'saintAndre', spots: ['bar'], generic: 'Bar du centre', dist: [0.2, 1.2],
+      capacity: 12, present: 2, joined: 6, meJoined: true, recurrence: { weekdays: [3], time: '19:00' }, durationMin: 180,
+      description: "Tous les mercredis soir : Codenames, Dixit, Skyjo, Time's Up… Ramène tes jeux préférés, ambiance détendue garantie.",
+    },
+    {
+      title: 'Pétanque entre voisins', emoji: '🎯', kind: 'live', category: 'jeux',
+      place: 'deBonne', spots: ['park', 'pitch'], generic: 'Square', dist: [0.3, 1],
+      capacity: 6, present: 4, joined: 0, startedMinAgo: 20, durationMin: 120,
+      description: 'Deux équipes de 3 : il manque 2 personnes. On a les boules et le cochonnet !',
+    },
+    {
+      title: 'Yoga au parc', emoji: '🧘', kind: 'regular', category: 'bienetre',
+      place: 'paulMistral', spots: ['park'], generic: 'Parc', dist: [0.6, 2],
+      capacity: 15, present: 1, joined: 8, recurrence: { weekdays: [6], time: '10:00' }, durationMin: 75,
+      description: "Vinyasa doux en plein air, tous niveaux. Apporte ton tapis et une bouteille d'eau. Gratuit, chapeau libre 🙏",
+    },
+    {
+      title: 'Rando aux lacs Robert', emoji: '🥾', kind: 'event', category: 'nature',
+      place: 'chamrousse', spots: ['water', 'peak', 'view'], generic: 'Départ de randonnée', dist: [10, 18],
+      alt: {
+        title: 'Rando à la journée',
+        description: 'Boucle de 10 km avec pique-nique au bord de l’eau. Bonnes chaussures conseillées, covoiturage possible.',
+        dist: [5, 30],
+      },
+      capacity: 8, present: 2, joined: 3, when: { weekday: 0, time: '09:00' }, durationMin: 300,
+      description: "Boucle de 9 km / 450 m D+ depuis Chamrousse 1650 jusqu'aux lacs Robert. Pique-nique au bord du lac, covoiturage depuis Grenoble.",
+    },
+    {
+      title: 'Sommet du Moucherotte', emoji: '⛰️', kind: 'event', category: 'nature',
+      place: 'stNizier', spots: ['peak', 'view'], generic: 'Sentier de crête', dist: [8, 15],
+      alt: {
+        title: 'Rando au sommet',
+        description: 'Montée au sommet pour profiter de la vue. Niveau intermédiaire, prévois de l’eau et un coupe-vent.',
+        dist: [3, 30],
+      },
+      capacity: 6, present: 1, joined: 2, when: { weekday: 6, time: '09:30' }, durationMin: 240,
+      description: 'Montée au Moucherotte (1 901 m) : vue à 360° sur Grenoble, la Chartreuse et le Mont-Blanc par temps clair.',
+    },
+    {
+      title: 'Balade street art', emoji: '🎨', kind: 'event', category: 'culture',
+      place: 'grenette', spots: ['square', 'culture'], generic: 'Centre-ville', dist: [0.3, 1.5],
+      alt: {
+        title: 'Balade street art',
+        description: 'Parcours à pied des plus belles fresques du coin. Anecdotes et techniques des artistes au programme.',
+      },
+      capacity: 12, present: 2, joined: 4, when: { daysAhead: 1, time: '15:00' }, durationMin: 120,
+      description: "Parcours des plus belles fresques du Street Art Fest, du centre jusqu'à l'Île Verte. Anecdotes et techniques des artistes au programme.",
+    },
+    {
+      title: 'Pique-nique partagé', emoji: '🧺', kind: 'event', category: 'food',
+      place: 'villeneuve', spots: ['park'], generic: 'Grand parc', dist: [1, 4],
+      capacity: 20, present: 4, joined: 6, when: { weekday: 0, time: '12:30' }, durationMin: 150,
+      description: 'Chacun apporte un plat à partager. Couvertures, frisbee et bonne humeur fournis !',
+    },
+    {
+      title: 'Basket 3x3', emoji: '🏀', kind: 'live', category: 'sport',
+      place: 'campus', spots: ['pitch'], generic: 'Terrain multisport', dist: [1, 4],
+      capacity: 6, present: 4, joined: 1, startedMinAgo: 5, durationMin: 90,
+      description: 'Terrain libre : il manque 1 joueur pour faire du 3 contre 3.',
+    },
+    {
+      title: 'Échecs en plein air', emoji: '♟️', kind: 'regular', category: 'jeux',
+      place: 'esplanade', spots: ['square', 'park'], generic: 'Esplanade', dist: [0.5, 1.5],
+      capacity: 10, present: 2, joined: 3, recurrence: { weekdays: [6], time: '15:00' }, durationMin: 180,
+      description: "Échiquiers en libre accès, parties rapides et blitz. Tous niveaux, on t'apprend volontiers les ouvertures !",
+    },
+    {
+      title: 'Ciné-club : soirée Miyazaki', emoji: '🎬', kind: 'event', category: 'culture',
+      place: 'melies', spots: ['cinema', 'culture'], generic: 'Cinéma du quartier', dist: [0.5, 3],
+      capacity: 10, present: 3, joined: 4, when: { weekday: 5, time: '20:00' }, durationMin: 180,
+      description: "Projection du « Voyage de Chihiro » en VOST, puis on débriefe autour d'un verre.",
+    },
+    {
+      title: 'Sortie vélo dans le Vercors', emoji: '🚵', kind: 'regular', category: 'sport',
+      place: 'sassenage', spots: ['square', 'park'], generic: 'Rond-point de départ', dist: [4, 8],
+      alt: {
+        title: 'Sortie vélo du samedi',
+        description: 'Boucle de 60 km sur les petites routes du coin. Niveau intermédiaire, pause café à mi-parcours.',
+        dist: [0.5, 5],
+      },
+      capacity: 10, present: 2, joined: 4, recurrence: { weekdays: [6], time: '09:00' }, durationMin: 240,
+      description: "Boucle de 60 km par les gorges d'Engins et Lans-en-Vercors. Niveau intermédiaire, pause café à mi-parcours.",
+    },
+    {
+      title: 'Ultimate frisbee', emoji: '🥏', kind: 'live', category: 'sport',
+      place: 'ileVerte', spots: ['park'], generic: 'Grande pelouse', dist: [0.8, 2.5],
+      capacity: 12, present: 8, joined: 1, startedMinAgo: 15, durationMin: 120,
+      description: 'Match amical sur la pelouse. Il reste 3 places, venez !',
+    },
+    {
+      title: 'Repas partagé à la Halle', emoji: '🍲', kind: 'event', category: 'food',
+      place: 'sainteClaire', spots: ['market', 'square'], generic: 'Halle du marché', dist: [0.3, 1.5],
+      alt: {
+        title: 'Repas partagé au marché',
+        description: 'On fait le marché ensemble puis on cuisine un grand repas de saison. Participation : 8 €.',
+      },
+      capacity: 8, present: 2, joined: 5, when: { daysAhead: 2, time: '12:00' }, durationMin: 90,
+      description: 'On fait le marché ensemble puis on cuisine un grand repas de saison. Participation : 8 €.',
+    },
+    {
+      title: 'Karaoké du jeudi', emoji: '🎤', kind: 'regular', category: 'musique',
+      place: 'championnet', spots: ['bar'], generic: 'Bar du quartier', dist: [0.3, 1.5],
+      capacity: 14, present: 3, joined: 5, recurrence: { weekdays: [4], time: '21:00' }, durationMin: 150,
+      description: "Micro ouvert à tous, des tubes des années 80 à aujourd'hui. Fous rires garantis 🎶",
+    },
+    {
+      title: "Balade d'automne au lac de Laffrey", emoji: '🍂', kind: 'event', category: 'nature',
+      place: 'laffrey', spots: ['water', 'park'], generic: 'Lac', dist: [12, 20],
+      alt: {
+        title: "Balade d'automne au bord de l'eau",
+        description: "Balade tranquille (7 km, plat) au milieu des couleurs d'automne. Idéal en famille, chiens bienvenus.",
+        dist: [1, 30],
+      },
+      capacity: 10, present: 3, joined: 2, when: { daysAhead: 6, time: '10:00' }, durationMin: 180,
+      description: "Tour du Grand lac (7 km, plat) au milieu des couleurs d'automne. Idéal en famille, chiens bienvenus.",
+    },
+    {
+      title: "Course d'orientation en Chartreuse", emoji: '🧭', kind: 'event', category: 'nature',
+      place: 'colDePorte', spots: ['park', 'view', 'peak'], generic: 'Forêt', dist: [10, 20],
+      alt: {
+        title: "Course d'orientation",
+        description: 'Parcours balisé de 6 km, cartes et boussoles fournies. Par équipes de 2 ou 3.',
+        dist: [1, 15],
+      },
+      capacity: 12, present: 3, joined: 2, when: { daysAhead: 5, time: '10:00' }, durationMin: 180,
+      description: 'Parcours balisé de 6 km en forêt, cartes et boussoles fournies. Par équipes de 2 ou 3.',
+    },
+    {
+      title: "Roller à l'Anneau", emoji: '🛼', kind: 'regular', category: 'sport',
+      place: 'anneau', spots: ['park', 'pitch'], generic: 'Piste', dist: [0.8, 2.5],
+      alt: {
+        title: 'Session roller',
+        description: 'Randonnée roller tranquille, tous niveaux. Casque et protections conseillés.',
+      },
+      capacity: 15, present: 3, joined: 5, recurrence: { weekdays: [1, 5], time: '18:30' }, durationMin: 90,
+      description: "Randonnée roller sur l'anneau de vitesse puis balade dans le parc. Casque et protections conseillés.",
+    },
+    {
+      title: 'Visite du Musée de Grenoble', emoji: '🖼️', kind: 'event', category: 'culture',
+      place: 'musee', spots: ['museum', 'culture'], generic: 'Musée', dist: [0.4, 3],
+      alt: {
+        title: 'Visite du musée',
+        description: 'Visite des collections en petit groupe, puis un café pour en discuter.',
+      },
+      capacity: 8, present: 1, joined: 3, when: { daysAhead: 3, time: '14:30' }, durationMin: 120,
+      description: "Les collections permanentes sont gratuites ! Focus sur l'art moderne : Matisse, Picasso, Chagall…",
+    },
+    {
+      title: 'Tournoi de Mölkky', emoji: '🪵', kind: 'event', category: 'jeux',
+      place: 'jardinPlantes', spots: ['park'], generic: 'Square', dist: [0.3, 1.5], mine: true,
+      capacity: 12, present: 2, joined: 5, when: { inMinutes: 22 * 60 + 30 }, durationMin: 150,
+      description: 'Tournoi en équipes de 2, lots pour les gagnants 🏆 Jus de pomme et goûter sur place.',
+    },
+  ],
+};

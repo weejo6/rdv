@@ -5,6 +5,7 @@ import { useNow } from '../store/now';
 import { isActive, isMine, timing } from '../lib/status';
 import { DAY, HOUR, MIN, fmtFullDate, fmtOffset, fmtRelative, fmtTime } from '../lib/time';
 import { quoted } from '../lib/text';
+import { REGIONS, type RegionId } from '../lib/regions';
 import { PanelHeader } from './ui';
 
 const SPEEDS = [
@@ -19,6 +20,7 @@ export function DemoPanel() {
   const clock = useStore((s) => s.clock);
   const simEnabled = useStore((s) => s.simEnabled);
   const posMode = useStore((s) => s.posMode);
+  const demoRegion = useStore((s) => s.demoRegion);
   const locating = useStore((s) => s.locating);
   const a = useStore.getState();
   const [confirmReset, setConfirmReset] = useState(false);
@@ -151,13 +153,23 @@ export function DemoPanel() {
             <button type="button" className={posMode === 'auto' ? 'is-on' : ''} onClick={a.useRealPosition} disabled={locating}>
               <LocateFixed size={14} /> {locating ? 'Localisation…' : 'Ma position'}
             </button>
-            <button type="button" className={posMode === 'demo' ? 'is-on' : ''} onClick={a.useDemoPosition}>
-              <MapPin size={14} /> Grenoble
-            </button>
+            {(Object.keys(REGIONS) as RegionId[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                className={posMode === 'demo' && demoRegion === id ? 'is-on' : ''}
+                onClick={() => a.useDemoPosition(id)}
+              >
+                <MapPin size={14} /> {REGIONS[id].name}
+              </button>
+            ))}
           </div>
           <p className="muted small">
             Par défaut, les RDV sont générés autour de ta position, sur les vrais lieux du quartier (parcs, terrains,
-            places, bars…) trouvés dans OpenStreetMap.
+            places, bars…) trouvés dans OpenStreetMap. Grenoble et Montréal ont en plus du contenu fait main.
+          </p>
+          <p className="muted small">
+            Lien direct vers une ville : <code>…/rdv/?ville=montreal</code>
           </p>
         </section>
 

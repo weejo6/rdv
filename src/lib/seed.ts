@@ -1,4 +1,4 @@
-import type { CategoryId, EventKind, LatLng, Notif, Place, RdvEvent, Recurrence } from '../types';
+import type { CategoryId, EventKind, LatLng, Notif, Place, RdvEvent } from '../types';
 import { PEOPLE } from './people';
 import { DAY, HOUR, MIN } from './time';
 import { distanceKm, jitter, randomAround } from './geo';
@@ -6,54 +6,14 @@ import { chance, pick, randInt, shuffle, uid } from './random';
 import { timing } from './status';
 import { plural, quoted } from './text';
 import { pickFromPool, type PoolPlace, type SpotKind } from './places';
+import { GRENOBLE_REGION, regionAround, regionInCity, type LiveTpl, type Region, type SeedTpl, type When } from './regions';
 
-// ————————————————————————————————————————————————————————————————
-// Lieux réels autour de Grenoble (contenu de démo « fait main »)
-// Ailleurs, les lieux viennent d'OpenStreetMap (voir places.ts).
-// ————————————————————————————————————————————————————————————————
-
-export const GRENOBLE: LatLng = { lat: 45.1885, lng: 5.7245 };
-export const DEMO_HOME: Place = { lat: 45.1892, lng: 5.7246, label: 'Place Victor Hugo, Grenoble' };
-export const isNearGrenoble = (p: LatLng) => distanceKm(p, GRENOBLE) < 40;
-
-export const PLACES = {
-  paulMistral: { lat: 45.1858, lng: 5.7362, label: 'Parc Paul Mistral' },
-  paulMistralKiosque: { lat: 45.1869, lng: 5.7331, label: 'Parc Paul Mistral · pelouse nord' },
-  paulMistralStade: { lat: 45.1838, lng: 5.7392, label: 'Parc Paul Mistral · city stade' },
-  jardinDeVille: { lat: 45.1926, lng: 5.7297, label: 'Jardin de Ville' },
-  bastille: { lat: 45.1987, lng: 5.7253, label: 'Fort de la Bastille' },
-  quaiJay: { lat: 45.1942, lng: 5.7236, label: 'Quai Stéphane Jay' },
-  notreDame: { lat: 45.1929, lng: 5.7318, label: 'Place Notre-Dame' },
-  saintAndre: { lat: 45.1924, lng: 5.7283, label: 'Place Saint-André' },
-  grenette: { lat: 45.1903, lng: 5.7276, label: 'Place Grenette' },
-  sainteClaire: { lat: 45.1913, lng: 5.7306, label: 'Halle Sainte-Claire' },
-  ileVerte: { lat: 45.1985, lng: 5.744, label: "Berges de l'Isère · Île Verte" },
-  villeneuve: { lat: 45.1633, lng: 5.7352, label: 'Parc Jean Verlhac · Villeneuve' },
-  campus: { lat: 45.1932, lng: 5.7685, label: 'Domaine universitaire · Saint-Martin-d’Hères' },
-  melies: { lat: 45.1838, lng: 5.7213, label: 'Cinéma Le Méliès' },
-  deBonne: { lat: 45.1848, lng: 5.7223, label: 'Parc de la Caserne de Bonne' },
-  championnet: { lat: 45.1873, lng: 5.7218, label: 'Place Championnet' },
-  anneau: { lat: 45.1829, lng: 5.7425, label: 'Anneau de vitesse · Parc Paul Mistral' },
-  jardinPlantes: { lat: 45.1862, lng: 5.7318, label: 'Jardin des Plantes' },
-  musee: { lat: 45.195, lng: 5.7325, label: 'Musée de Grenoble' },
-  esplanade: { lat: 45.1962, lng: 5.7143, label: 'Esplanade de la Porte de France' },
-  gare: { lat: 45.1913, lng: 5.7147, label: 'Parvis de la gare' },
-  chamrousse: { lat: 45.1255, lng: 5.8775, label: 'Chamrousse 1650 · départ des lacs Robert' },
-  stNizier: { lat: 45.1697, lng: 5.6337, label: 'Saint-Nizier-du-Moucherotte' },
-  sassenage: { lat: 45.2048, lng: 5.6632, label: 'Sassenage · place de la mairie' },
-  laffrey: { lat: 45.0215, lng: 5.7742, label: 'Grand lac de Laffrey' },
-  colDePorte: { lat: 45.293, lng: 5.77, label: 'Col de Porte · Chartreuse' },
-  croixDeFer: { lat: 45.2271, lng: 6.2013, label: 'Col de la Croix de Fer' },
-} satisfies Record<string, Place>;
-
-type PlaceKey = keyof typeof PLACES;
-
-/** Spots urbains de Grenoble où des « lives » peuvent apparaître. */
-const URBAN_SPOTS: PlaceKey[] = [
-  'paulMistral', 'paulMistralKiosque', 'paulMistralStade', 'jardinDeVille', 'quaiJay', 'notreDame',
-  'saintAndre', 'grenette', 'ileVerte', 'villeneuve', 'campus', 'deBonne', 'championnet', 'anneau',
-  'jardinPlantes', 'esplanade', 'gare',
-];
+/**
+ * Génération des RDV simulés.
+ * - Dans une ville faite main (Grenoble, Montréal) : son contenu, sur ses lieux.
+ * - Ailleurs : des modèles génériques placés sur les vrais lieux alentour (OpenStreetMap),
+ *   complétés par les lieux faits main de la région s'il y en a une.
+ */
 
 /** Noms de lieux génériques, en dernier recours (pas de données OpenStreetMap). */
 const GENERIC_SPOTS = [
@@ -61,254 +21,26 @@ const GENERIC_SPOTS = [
   'Jardin public', 'Parvis de la mairie', 'Terrain multisport', 'Place de l’église', 'Coulée verte',
 ];
 
-/** Contexte de génération : centre + éventuels vrais lieux alentour. */
+/** Contexte de génération. */
 export interface SeedContext {
   center: LatLng;
+  /** Ville faite main dans laquelle on se trouve. */
+  city: Region | null;
   pool: PoolPlace[] | null;
+  /** true si les lieux viennent vraiment d'OpenStreetMap (sinon on peut retomber sur du générique). */
+  realData: boolean;
+}
+
+/** Construit le contexte : vrais lieux récupérés + lieux faits main de la région. */
+export function makeSeedContext(center: LatLng, fetched: PoolPlace[] | null): SeedContext {
+  const region = regionAround(center);
+  const pool = [...(fetched ?? []), ...(region ? Object.values(region.places) : [])];
+  return { center, city: regionInCity(center), pool: pool.length ? pool : null, realData: !!fetched?.length };
 }
 
 // ————————————————————————————————————————————————————————————————
 // Événements de départ
 // ————————————————————————————————————————————————————————————————
-
-type When = { weekday: number; time: string } | { daysAhead: number; time: string } | { inMinutes: number };
-
-interface SeedTpl {
-  title: string;
-  emoji: string;
-  kind: EventKind;
-  category: CategoryId;
-  /** Lieu à Grenoble. */
-  place: PlaceKey;
-  /** Ailleurs : types de lieux OpenStreetMap acceptés (par préférence) et distance visée (km). */
-  spots: SpotKind[];
-  dist: [number, number];
-  /** Ailleurs, si aucun lieu réel ne convient. */
-  generic: string;
-  /** Variante hors de Grenoble pour les contenus trop locaux. */
-  alt?: { title: string; description: string; dist?: [number, number] };
-  capacity: number;
-  present: number;
-  joined: number;
-  when?: When;
-  recurrence?: Recurrence;
-  startedMinAgo?: number;
-  durationMin: number;
-  description: string;
-  meJoined?: boolean;
-  mine?: boolean;
-}
-
-const SEEDS: SeedTpl[] = [
-  {
-    title: 'Partie de loup-garou', emoji: '🐺', kind: 'event', category: 'jeux',
-    place: 'paulMistralKiosque', spots: ['park'], generic: 'Parc du quartier', dist: [0.5, 1.5],
-    capacity: 10, present: 4, joined: 3, when: { weekday: 0, time: '14:00' }, durationMin: 150,
-    description: "On se retrouve sur la pelouse pour quelques parties de loup-garou. J'apporte les cartes et je fais le maître du jeu, débutants bienvenus ! 🐺🌕",
-  },
-  {
-    title: 'Tour en vélo · Col de la Croix de Fer', emoji: '🚴', kind: 'event', category: 'sport',
-    place: 'croixDeFer', spots: ['peak', 'view', 'water'], generic: 'Col', dist: [25, 40],
-    alt: {
-      title: 'Grande sortie vélo',
-      description: 'Sortie vélo à la journée avec une belle montée au programme. Rythme cool, on se regroupe au sommet pour la photo. Casque obligatoire, covoiturage possible.',
-      dist: [8, 30],
-    },
-    capacity: 5, present: 2, joined: 1, when: { weekday: 6, time: '08:00' }, durationMin: 360,
-    description: 'Montée depuis Allemond : 27 km et ~1 500 m de D+. Rythme cool, on se regroupe au sommet pour la photo et un chocolat chaud. Casque obligatoire, covoiturage possible depuis Grenoble.',
-  },
-  {
-    title: 'Loup-garou du dimanche', emoji: '🐺', kind: 'regular', category: 'jeux',
-    place: 'jardinDeVille', spots: ['park'], generic: 'Jardin public', dist: [0.3, 1.2],
-    capacity: 12, present: 3, joined: 4, recurrence: { weekdays: [0], time: '14:00' }, durationMin: 180,
-    description: 'Chaque dimanche après-midi : loup-garou géant avec rôles spéciaux (sorcière, cupidon, chasseur…). Maître du jeu expérimenté, ambiance bon enfant.',
-  },
-  {
-    title: 'Foot à 5', emoji: '⚽', kind: 'live', category: 'sport',
-    place: 'paulMistralStade', spots: ['pitch', 'park'], generic: 'City stade', dist: [0.4, 1.5],
-    capacity: 10, present: 7, joined: 0, startedMinAgo: 8, durationMin: 90,
-    description: 'On est 7 sur le terrain, il manque 3 joueurs pour faire du 5 contre 5 ! Venez comme vous êtes 😄',
-  },
-  {
-    title: 'Running du soir', emoji: '🏃', kind: 'regular', category: 'sport',
-    place: 'quaiJay', spots: ['park', 'water'], generic: 'Berges de la rivière', dist: [0.4, 2],
-    capacity: 20, present: 4, joined: 7, meJoined: true, recurrence: { weekdays: [2, 4], time: '19:00' }, durationMin: 60,
-    description: 'Footing de 8 km, allure ~6 min/km. Tous niveaux : on attend tout le monde au retour !',
-  },
-  {
-    title: 'Jam session acoustique', emoji: '🎸', kind: 'event', category: 'musique',
-    place: 'notreDame', spots: ['square', 'park'], generic: 'Place de l’église', dist: [0.3, 1.2],
-    capacity: 8, present: 3, joined: 2, when: { inMinutes: 50 }, durationMin: 120,
-    description: 'Guitares, cajón, ukulélé… Viens avec ton instrument ou juste ta voix ! Répertoire folk / pop, on improvise beaucoup.',
-  },
-  {
-    title: 'Coucher de soleil à la Bastille', emoji: '🌄', kind: 'event', category: 'nature',
-    place: 'bastille', spots: ['view', 'peak', 'park'], generic: 'Belvédère', dist: [1, 3],
-    alt: {
-      title: 'Coucher de soleil au belvédère',
-      description: "Petite montée à pied jusqu'au point de vue, puis apéro face au coucher de soleil. Prévois une frontale pour la descente !",
-      dist: [0.5, 12],
-    },
-    capacity: 15, present: 2, joined: 6, when: { daysAhead: 1, time: '17:15' }, durationMin: 120,
-    description: 'Montée à pied par le jardin des Dauphins (45 min), puis apéro face au Vercors. Prévois une frontale pour la descente !',
-  },
-  {
-    title: 'Apéro jeux de société', emoji: '🎲', kind: 'regular', category: 'jeux',
-    place: 'saintAndre', spots: ['bar'], generic: 'Bar du centre', dist: [0.2, 1.2],
-    capacity: 12, present: 2, joined: 6, meJoined: true, recurrence: { weekdays: [3], time: '19:00' }, durationMin: 180,
-    description: "Tous les mercredis soir : Codenames, Dixit, Skyjo, Time's Up… Ramène tes jeux préférés, ambiance détendue garantie.",
-  },
-  {
-    title: 'Pétanque entre voisins', emoji: '🎯', kind: 'live', category: 'jeux',
-    place: 'deBonne', spots: ['park', 'pitch'], generic: 'Square', dist: [0.3, 1],
-    capacity: 6, present: 4, joined: 0, startedMinAgo: 20, durationMin: 120,
-    description: 'Deux équipes de 3 : il manque 2 personnes. On a les boules et le cochonnet !',
-  },
-  {
-    title: 'Yoga au parc', emoji: '🧘', kind: 'regular', category: 'bienetre',
-    place: 'paulMistral', spots: ['park'], generic: 'Parc', dist: [0.6, 2],
-    capacity: 15, present: 1, joined: 8, recurrence: { weekdays: [6], time: '10:00' }, durationMin: 75,
-    description: "Vinyasa doux en plein air, tous niveaux. Apporte ton tapis et une bouteille d'eau. Gratuit, chapeau libre 🙏",
-  },
-  {
-    title: 'Rando aux lacs Robert', emoji: '🥾', kind: 'event', category: 'nature',
-    place: 'chamrousse', spots: ['water', 'peak', 'view'], generic: 'Départ de randonnée', dist: [10, 18],
-    alt: {
-      title: 'Rando à la journée',
-      description: 'Boucle de 10 km avec pique-nique au bord de l’eau. Bonnes chaussures conseillées, covoiturage possible.',
-      dist: [5, 30],
-    },
-    capacity: 8, present: 2, joined: 3, when: { weekday: 0, time: '09:00' }, durationMin: 300,
-    description: "Boucle de 9 km / 450 m D+ depuis Chamrousse 1650 jusqu'aux lacs Robert. Pique-nique au bord du lac, covoiturage depuis Grenoble.",
-  },
-  {
-    title: 'Sommet du Moucherotte', emoji: '⛰️', kind: 'event', category: 'nature',
-    place: 'stNizier', spots: ['peak', 'view'], generic: 'Sentier de crête', dist: [8, 15],
-    alt: {
-      title: 'Rando au sommet',
-      description: 'Montée au sommet pour profiter de la vue. Niveau intermédiaire, prévois de l’eau et un coupe-vent.',
-      dist: [3, 30],
-    },
-    capacity: 6, present: 1, joined: 2, when: { weekday: 6, time: '09:30' }, durationMin: 240,
-    description: 'Montée au Moucherotte (1 901 m) : vue à 360° sur Grenoble, la Chartreuse et le Mont-Blanc par temps clair.',
-  },
-  {
-    title: 'Balade street art', emoji: '🎨', kind: 'event', category: 'culture',
-    place: 'grenette', spots: ['square', 'culture'], generic: 'Centre-ville', dist: [0.3, 1.5],
-    alt: {
-      title: 'Balade street art',
-      description: 'Parcours à pied des plus belles fresques du coin. Anecdotes et techniques des artistes au programme.',
-    },
-    capacity: 12, present: 2, joined: 4, when: { daysAhead: 1, time: '15:00' }, durationMin: 120,
-    description: "Parcours des plus belles fresques du Street Art Fest, du centre jusqu'à l'Île Verte. Anecdotes et techniques des artistes au programme.",
-  },
-  {
-    title: 'Pique-nique partagé', emoji: '🧺', kind: 'event', category: 'food',
-    place: 'villeneuve', spots: ['park'], generic: 'Grand parc', dist: [1, 4],
-    capacity: 20, present: 4, joined: 6, when: { weekday: 0, time: '12:30' }, durationMin: 150,
-    description: 'Chacun apporte un plat à partager. Couvertures, frisbee et bonne humeur fournis !',
-  },
-  {
-    title: 'Basket 3x3', emoji: '🏀', kind: 'live', category: 'sport',
-    place: 'campus', spots: ['pitch'], generic: 'Terrain multisport', dist: [1, 4],
-    capacity: 6, present: 4, joined: 1, startedMinAgo: 5, durationMin: 90,
-    description: 'Terrain libre : il manque 1 joueur pour faire du 3 contre 3.',
-  },
-  {
-    title: 'Échecs en plein air', emoji: '♟️', kind: 'regular', category: 'jeux',
-    place: 'esplanade', spots: ['square', 'park'], generic: 'Esplanade', dist: [0.5, 1.5],
-    capacity: 10, present: 2, joined: 3, recurrence: { weekdays: [6], time: '15:00' }, durationMin: 180,
-    description: "Échiquiers en libre accès, parties rapides et blitz. Tous niveaux, on t'apprend volontiers les ouvertures !",
-  },
-  {
-    title: 'Ciné-club : soirée Miyazaki', emoji: '🎬', kind: 'event', category: 'culture',
-    place: 'melies', spots: ['cinema', 'culture'], generic: 'Cinéma du quartier', dist: [0.5, 3],
-    capacity: 10, present: 3, joined: 4, when: { weekday: 5, time: '20:00' }, durationMin: 180,
-    description: "Projection du « Voyage de Chihiro » en VOST, puis on débriefe autour d'un verre.",
-  },
-  {
-    title: 'Sortie vélo dans le Vercors', emoji: '🚵', kind: 'regular', category: 'sport',
-    place: 'sassenage', spots: ['square', 'park'], generic: 'Rond-point de départ', dist: [4, 8],
-    alt: {
-      title: 'Sortie vélo du samedi',
-      description: 'Boucle de 60 km sur les petites routes du coin. Niveau intermédiaire, pause café à mi-parcours.',
-      dist: [0.5, 5],
-    },
-    capacity: 10, present: 2, joined: 4, recurrence: { weekdays: [6], time: '09:00' }, durationMin: 240,
-    description: "Boucle de 60 km par les gorges d'Engins et Lans-en-Vercors. Niveau intermédiaire, pause café à mi-parcours.",
-  },
-  {
-    title: 'Ultimate frisbee', emoji: '🥏', kind: 'live', category: 'sport',
-    place: 'ileVerte', spots: ['park'], generic: 'Grande pelouse', dist: [0.8, 2.5],
-    capacity: 12, present: 8, joined: 1, startedMinAgo: 15, durationMin: 120,
-    description: 'Match amical sur la pelouse. Il reste 3 places, venez !',
-  },
-  {
-    title: 'Repas partagé à la Halle', emoji: '🍲', kind: 'event', category: 'food',
-    place: 'sainteClaire', spots: ['market', 'square'], generic: 'Halle du marché', dist: [0.3, 1.5],
-    alt: {
-      title: 'Repas partagé au marché',
-      description: 'On fait le marché ensemble puis on cuisine un grand repas de saison. Participation : 8 €.',
-    },
-    capacity: 8, present: 2, joined: 5, when: { daysAhead: 2, time: '12:00' }, durationMin: 90,
-    description: 'On fait le marché ensemble puis on cuisine un grand repas de saison. Participation : 8 €.',
-  },
-  {
-    title: 'Karaoké du jeudi', emoji: '🎤', kind: 'regular', category: 'musique',
-    place: 'championnet', spots: ['bar'], generic: 'Bar du quartier', dist: [0.3, 1.5],
-    capacity: 14, present: 3, joined: 5, recurrence: { weekdays: [4], time: '21:00' }, durationMin: 150,
-    description: "Micro ouvert à tous, des tubes des années 80 à aujourd'hui. Fous rires garantis 🎶",
-  },
-  {
-    title: "Balade d'automne au lac de Laffrey", emoji: '🍂', kind: 'event', category: 'nature',
-    place: 'laffrey', spots: ['water', 'park'], generic: 'Lac', dist: [12, 20],
-    alt: {
-      title: "Balade d'automne au bord de l'eau",
-      description: "Balade tranquille (7 km, plat) au milieu des couleurs d'automne. Idéal en famille, chiens bienvenus.",
-      dist: [1, 30],
-    },
-    capacity: 10, present: 3, joined: 2, when: { daysAhead: 6, time: '10:00' }, durationMin: 180,
-    description: "Tour du Grand lac (7 km, plat) au milieu des couleurs d'automne. Idéal en famille, chiens bienvenus.",
-  },
-  {
-    title: "Course d'orientation en Chartreuse", emoji: '🧭', kind: 'event', category: 'nature',
-    place: 'colDePorte', spots: ['park', 'view', 'peak'], generic: 'Forêt', dist: [10, 20],
-    alt: {
-      title: "Course d'orientation",
-      description: 'Parcours balisé de 6 km, cartes et boussoles fournies. Par équipes de 2 ou 3.',
-      dist: [1, 15],
-    },
-    capacity: 12, present: 3, joined: 2, when: { daysAhead: 5, time: '10:00' }, durationMin: 180,
-    description: 'Parcours balisé de 6 km en forêt, cartes et boussoles fournies. Par équipes de 2 ou 3.',
-  },
-  {
-    title: "Roller à l'Anneau", emoji: '🛼', kind: 'regular', category: 'sport',
-    place: 'anneau', spots: ['park', 'pitch'], generic: 'Piste', dist: [0.8, 2.5],
-    alt: {
-      title: 'Session roller',
-      description: 'Randonnée roller tranquille, tous niveaux. Casque et protections conseillés.',
-    },
-    capacity: 15, present: 3, joined: 5, recurrence: { weekdays: [1, 5], time: '18:30' }, durationMin: 90,
-    description: "Randonnée roller sur l'anneau de vitesse puis balade dans le parc. Casque et protections conseillés.",
-  },
-  {
-    title: 'Visite du Musée de Grenoble', emoji: '🖼️', kind: 'event', category: 'culture',
-    place: 'musee', spots: ['museum', 'culture'], generic: 'Musée', dist: [0.4, 3],
-    alt: {
-      title: 'Visite du musée',
-      description: 'Visite des collections en petit groupe, puis un café pour en discuter.',
-    },
-    capacity: 8, present: 1, joined: 3, when: { daysAhead: 3, time: '14:30' }, durationMin: 120,
-    description: "Les collections permanentes sont gratuites ! Focus sur l'art moderne : Matisse, Picasso, Chagall…",
-  },
-  {
-    // Un RDV organisé par l'utilisateur, pour montrer tout de suite la demande de confirmation J-1.
-    title: 'Tournoi de Mölkky', emoji: '🪵', kind: 'event', category: 'jeux',
-    place: 'jardinPlantes', spots: ['park'], generic: 'Square', dist: [0.3, 1.5], mine: true,
-    capacity: 12, present: 2, joined: 5, when: { inMinutes: 22 * 60 + 30 }, durationMin: 150,
-    description: 'Tournoi en équipes de 2, lots pour les gagnants 🏆 Jus de pomme et goûter sur place.',
-  },
-];
 
 function resolveWhen(w: When, now: number): number {
   if ('inMinutes' in w) {
@@ -337,28 +69,30 @@ function pickParticipants(count: number, exclude: string[]): string[] {
 }
 
 /**
- * Lieu d'un RDV de départ : lieu fait main (Grenoble), vrai lieu OpenStreetMap, ou point générique
- * si on n'a aucune donnée. Avec des données mais aucun lieu du bon type : null (RDV non généré).
+ * Lieu d'un RDV de départ : lieu fait main, vrai lieu OpenStreetMap, ou point générique si on
+ * n'a aucune donnée. Avec des données mais aucun lieu du bon type : null (RDV non généré).
  */
 function seedPlace(tpl: SeedTpl, ctx: SeedContext, used: Set<string>): Place | null {
-  if (isNearGrenoble(ctx.center)) {
-    const base = PLACES[tpl.place];
+  if (ctx.city) {
+    const base = ctx.city.places[tpl.place];
     return { ...jitter(base, 20), label: base.label };
   }
-  const dist = tpl.alt?.dist ?? tpl.dist;
+  const dist = tpl.alt?.dist ?? tpl.dist ?? [0.3, 3];
   if (ctx.pool) {
     const p =
-      pickFromPool(ctx.pool, tpl.spots, ctx.center, dist, used) ??
+      pickFromPool(ctx.pool, tpl.spots ?? ['park'], ctx.center, dist, used) ??
       (tpl.mine ? pickFromPool(ctx.pool, ['park', 'square'], ctx.center, [0, 3], used) : null);
-    return p ? { ...jitter(p, 15), label: p.label } : null;
+    if (p) return { ...jitter(p, 15), label: p.label };
+    // Avec de vraies données mais aucun lieu adapté, on ne génère pas ce RDV.
+    if (ctx.realData) return null;
   }
-  return { ...randomAround(ctx.center, dist[0], Math.min(dist[1], 6)), label: tpl.generic };
+  return { ...randomAround(ctx.center, dist[0], Math.min(dist[1], 6)), label: tpl.generic ?? pick(GENERIC_SPOTS) };
 }
 
 function buildSeed(tpl: SeedTpl, ctx: SeedContext, now: number, used: Set<string>): RdvEvent | null {
   const place = seedPlace(tpl, ctx, used);
   if (!place) return null;
-  const local = isNearGrenoble(ctx.center);
+  const local = !!ctx.city;
   const title = !local && tpl.alt ? tpl.alt.title : tpl.title;
   const description = !local && tpl.alt ? tpl.alt.description : tpl.description;
   const organizerId = tpl.mine ? 'me' : pick(PEOPLE).id;
@@ -398,9 +132,11 @@ function buildSeed(tpl: SeedTpl, ctx: SeedContext, now: number, used: Set<string
 
 /** Génère le monde de départ autour d'un centre. */
 export function seedWorld(ctx: SeedContext, now: number, opts: { includeMine: boolean }): Record<string, RdvEvent> {
+  // Hors ville faite main, on réutilise les modèles de Grenoble qui savent s'adapter (types de lieux).
+  const templates = ctx.city ? ctx.city.seeds : GRENOBLE_REGION.seeds.filter((t) => t.spots);
   const out: Record<string, RdvEvent> = {};
   const used = new Set<string>();
-  for (const tpl of SEEDS) {
+  for (const tpl of templates) {
     if (tpl.mine && !opts.includeMine) continue;
     const e = buildSeed(tpl, ctx, now, used);
     if (e) out[e.id] = e;
@@ -442,7 +178,7 @@ export function welcomeNotifs(events: Record<string, RdvEvent>, now: number): No
 // Génération continue (simulation)
 // ————————————————————————————————————————————————————————————————
 
-const LIVE_TPL: { title: string; emoji: string; category: CategoryId; cap: [number, number]; spots: SpotKind[] }[] = [
+const LIVE_TPL: LiveTpl[] = [
   { title: 'Partie de loup-garou', emoji: '🐺', category: 'jeux', cap: [8, 12], spots: ['park'] },
   { title: 'Mölkky', emoji: '🪵', category: 'jeux', cap: [4, 8], spots: ['park'] },
   { title: 'Foot improvisé', emoji: '⚽', category: 'sport', cap: [8, 12], spots: ['pitch', 'park'] },
@@ -468,12 +204,12 @@ function liveDescription(present: number, missing: number) {
 }
 
 function spawnPlace(ctx: SeedContext, maxKm: number, spots: SpotKind[]): Place {
-  if (isNearGrenoble(ctx.center)) {
-    const candidates = URBAN_SPOTS.map((k) => PLACES[k]).filter((p) => distanceKm(ctx.center, p) < maxKm);
-    if (candidates.length) {
-      const base = pick(candidates);
-      return { ...jitter(base, 70), label: base.label };
-    }
+  if (ctx.city) {
+    const city = ctx.city;
+    const candidates = city.urbanSpots.map((k) => city.places[k]);
+    const near = candidates.filter((p) => distanceKm(ctx.center, p) < maxKm);
+    const base = pick(near.length ? near : candidates);
+    return { ...jitter(base, 70), label: base.label };
   }
   if (ctx.pool) {
     const p = pickFromPool(ctx.pool, spots, ctx.center, [0, maxKm]);
@@ -484,7 +220,7 @@ function spawnPlace(ctx: SeedContext, maxKm: number, spots: SpotKind[]): Place {
 
 /** Un habitant fictif lance un live près de l'utilisateur. */
 export function makeLiveEvent(ctx: SeedContext, now: number): RdvEvent {
-  const tpl = pick(LIVE_TPL);
+  const tpl = pick([...LIVE_TPL, ...(regionAround(ctx.center)?.extraLives ?? [])]);
   const capacity = randInt(tpl.cap[0], tpl.cap[1]);
   const missing = randInt(1, Math.min(4, capacity - 2));
   const present = capacity - missing;

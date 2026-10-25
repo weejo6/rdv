@@ -18,9 +18,8 @@ import { distanceKm, fmtDistance } from '../lib/geo';
 import { PEOPLE, WELCOME_MESSAGES, firstNameOf } from '../lib/people';
 import { chance, pick, rand, uid } from '../lib/random';
 import {
-  DEMO_HOME,
-  isNearGrenoble,
   makeLiveEvent,
+  makeSeedContext,
   makePlannedEvent,
   regularsFor,
   seedWorld,
@@ -28,6 +27,10 @@ import {
   type SeedContext,
 } from '../lib/seed';
 import { fetchPlacePool, type PlacePool } from '../lib/places';
+import { REGIONS, guessRegion, parseRegion, regionInCity, type RegionId } from '../lib/regions';
+
+/** Ville de démo par défaut : Montréal pour un navigateur au Québec / en Ontario, sinon Grenoble. */
+const FALLBACK_REGION: RegionId = guessRegion();
 import { DEFAULT_FILTERS, matchesFilters } from '../lib/selectors';
 import { isActive, isFull, isJoined, isMine, phaseOf, remainingSpots, takenCount, timing } from '../lib/status';
 import { plural, quoted } from '../lib/text';
@@ -75,8 +78,10 @@ interface PersistedState {
   simOffset: number;
   me: { name: string };
   myPos: Place;
-  /** 'auto' : suit la géolocalisation (par défaut) · 'demo' : Grenoble forcé. */
+  /** 'auto' : suit la géolocalisation (par défaut) · 'demo' : ville de démo forcée. */
   posMode: 'auto' | 'demo';
+  /** Ville de démo (forcée, ou de secours sans géolocalisation). */
+  demoRegion: RegionId;
   /** Centre autour duquel les RDV simulés ont été générés. */
   seedCenter: LatLng | null;
   /** Vrais lieux (OpenStreetMap) autour de la position, hors Grenoble. */
@@ -145,7 +150,7 @@ interface Actions {
   /** Au démarrage : géolocalise puis génère les RDV autour de toi (Grenoble en secours). */
   bootstrap: () => void;
   useRealPosition: () => void;
-  useDemoPosition: () => void;
+  useDemoPosition: (region: RegionId) => void;
   /** Génère les RDV simulés autour d'un point (avec les vrais lieux alentour). */
   reseedAt: (center: LatLng, opts?: { full?: boolean }) => Promise<void>;
 }
@@ -211,8 +216,8 @@ export const useStore = create<StoreState>()(
       /** Contexte de génération : ta position + les vrais lieux alentour si on les a. */
       const seedCtx = (): SeedContext => {
         const s = get();
-        const pool = s.placePool && distanceKm(s.placePool.center, s.myPos) < 5 ? s.placePool.places : null;
-        return { center: s.myPos, pool };
+        const fetched = s.placePool && distanceKm(s.placePool.center, s.myPos) < 5 ? s.placePool.places : null;
+        return makeSeedContext(s.myPos, fetched);
       };
 
       /** Après un saut dans le temps, on regarnit la carte (sans notifications). */
@@ -243,8 +248,9 @@ export const useStore = create<StoreState>()(
         seededAt: 0,
         simOffset: 0,
         me: { name: 'Jo' },
-        myPos: DEMO_HOME,
+        myPos: REGIONS[FALLBACK_REGION].home,
         posMode: 'auto',
+        demoRegion: FALLBACK_REGION,
         seedCenter: null,
         placePool: null,
         introSeen: false,
@@ -866,11 +872,24 @@ export const useStore = create<StoreState>()(
         // ——————————————————— Position ———————————————————
 
         bootstrap: () => {
+          // Lien direct vers une ville de démo : …/rdv/?ville=montreal
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            const forced = parseRegion(url.searchParams.get('ville'));
+            if (forced) {
+              url.searchParams.delete('ville');
+              window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+              get().useDemoPosition(forced);
+              return;
+            }
+          }
+
           const s = get();
           const stale = !s.seededAt || Date.now() - s.seededAt > 12 * HOUR || Object.keys(s.events).length === 0;
 
           if (s.posMode === 'demo') {
-            if (stale) void get().reseedAt(DEMO_HOME);
+            const home = REGIONS[s.demoRegion].home;
+            if (stale || !s.seedCenter || distanceKm(s.seedCenter, home) > RESEED_DISTANCE_KM) void get().reseedAt(home);
             return;
           }
 
@@ -890,13 +909,12 @@ export const useStore = create<StoreState>()(
               if (stale && !seeded) {
                 seeded = true;
                 await get().reseedAt(get().myPos);
-                if (!get().introSeen || get().myPos === DEMO_HOME) {
-                  toast({
-                    tone: 'info',
-                    title: 'Position non disponible',
-                    body: 'La démo se déroule autour de Grenoble. Autorise la géolocalisation pour voir des RDV autour de toi.',
-                  });
-                }
+                const city = regionInCity(get().myPos);
+                toast({
+                  tone: 'info',
+                  title: 'Position non disponible',
+                  body: `La démo se déroule ${city ? `à ${city.name}` : 'autour de ta dernière position'}. Autorise la géolocalisation pour voir des RDV autour de toi.`,
+                });
               }
               return;
             }
@@ -917,22 +935,22 @@ export const useStore = create<StoreState>()(
           const token = ++seedToken;
           set({ seeding: true });
 
-          // Vrais lieux autour du point (hors Grenoble, qui a ses lieux faits main).
+          // Vrais lieux autour du point (sauf dans Grenoble même, qui a ses lieux faits main).
           let pool = get().placePool;
-          if (!isNearGrenoble(center) && (!pool || distanceKm(pool.center, center) > 3)) {
+          if (!regionInCity(center) && (!pool || distanceKm(pool.center, center) > 3)) {
             pool = (await fetchPlacePool(center)) ?? pool;
           }
           if (token !== seedToken) return;
 
           const s = get();
           const now = nowSim();
-          const usablePool = pool && distanceKm(pool.center, center) < 5 ? pool.places : null;
+          const fetched = pool && distanceKm(pool.center, center) < 5 ? pool.places : null;
           // On garde les RDV que tu as créés, et tes RDV / inscriptions du coin ; le reste est régénéré.
           const keep = (e: RdvEvent) =>
-            (isMine(e) && !e.demoSeed) || ((isMine(e) || isJoined(e)) && distanceKm(center, e.place) < 50);
+            (isMine(e) && !e.demoSeed) || ((isMine(e) || isJoined(e)) && distanceKm(center, e.place) < 10);
           const kept = opts?.full ? {} : Object.fromEntries(Object.entries(s.events).filter(([, e]) => keep(e)));
           const hasDemoMine = Object.values(kept).some((e) => e.demoSeed && isActive(e, now));
-          const fresh = seedWorld({ center, pool: usablePool }, now, { includeMine: !hasDemoMine });
+          const fresh = seedWorld(makeSeedContext(center, fetched), now, { includeMine: !hasDemoMine });
           const events = { ...fresh, ...kept };
           set({
             events,
@@ -969,17 +987,18 @@ export const useStore = create<StoreState>()(
           });
         },
 
-        useDemoPosition: () => {
+        useDemoPosition: (regionId) => {
           const prev = get().seedCenter;
-          set({ myPos: DEMO_HOME, posMode: 'demo' });
-          get().flyTo(DEMO_HOME, 14);
-          if (!prev || distanceKm(prev, DEMO_HOME) > RESEED_DISTANCE_KM) void get().reseedAt(DEMO_HOME);
+          const home = REGIONS[regionId].home;
+          set({ myPos: home, posMode: 'demo', demoRegion: regionId });
+          get().flyTo(home, 14);
+          if (!prev || distanceKm(prev, home) > RESEED_DISTANCE_KM) void get().reseedAt(home);
         },
       };
     },
     {
       name: 'rdv-demo',
-      version: 2,
+      version: 3,
       storage: createIdbStorage<PersistedState>(),
       partialize: (s): PersistedState => ({
         seededAt: s.seededAt,
@@ -987,6 +1006,7 @@ export const useStore = create<StoreState>()(
         me: s.me,
         myPos: s.myPos,
         posMode: s.posMode,
+        demoRegion: s.demoRegion,
         seedCenter: s.seedCenter,
         placePool: s.placePool,
         introSeen: s.introSeen,
