@@ -1,5 +1,18 @@
 import { useEffect } from 'react';
-import { CircleCheck, CircleX, Clapperboard, Info, LocateFixed, Minus, Plus, Radio, TriangleAlert, X, Zap } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleX,
+  Clapperboard,
+  Info,
+  LoaderCircle,
+  LocateFixed,
+  Minus,
+  Plus,
+  Radio,
+  TriangleAlert,
+  X,
+  Zap,
+} from 'lucide-react';
 import type { Toast } from '../store/store';
 import { useStore } from '../store/store';
 import { useNow } from '../store/now';
@@ -84,8 +97,20 @@ const TOAST_ICONS = {
 
 export function Toasts() {
   const toasts = useStore((s) => s.toasts);
+  const seeding = useStore((s) => s.seeding);
   return (
     <div className="toasts" aria-live="polite">
+      {seeding && (
+        <div className="toast toast--info toast--loading" role="status">
+          <span className="toast__icon">
+            <LoaderCircle size={18} className="spin" />
+          </span>
+          <div className="toast__text">
+            <strong>Recherche des RDV autour de toi…</strong>
+            <span>Localisation et repérage des lieux du quartier</span>
+          </div>
+        </div>
+      )}
       {toasts.map((t) => (
         <ToastItem key={t.id} t={t} />
       ))}

@@ -148,14 +148,17 @@ export function DemoPanel() {
         <section className="demo-section">
           <h4>Position</h4>
           <div className="seg seg--full">
-            <button type="button" className={posMode === 'demo' ? 'is-on' : ''} onClick={a.useDemoPosition}>
-              <MapPin size={14} /> Grenoble (démo)
+            <button type="button" className={posMode === 'auto' ? 'is-on' : ''} onClick={a.useRealPosition} disabled={locating}>
+              <LocateFixed size={14} /> {locating ? 'Localisation…' : 'Ma position'}
             </button>
-            <button type="button" className={posMode === 'real' ? 'is-on' : ''} onClick={a.useRealPosition} disabled={locating}>
-              <LocateFixed size={14} /> {locating ? 'Localisation…' : 'Ma vraie position'}
+            <button type="button" className={posMode === 'demo' ? 'is-on' : ''} onClick={a.useDemoPosition}>
+              <MapPin size={14} /> Grenoble
             </button>
           </div>
-          <p className="muted small">Hors de Grenoble, la démo génère des RDV fictifs autour de toi.</p>
+          <p className="muted small">
+            Par défaut, les RDV sont générés autour de ta position, sur les vrais lieux du quartier (parcs, terrains,
+            places, bars…) trouvés dans OpenStreetMap.
+          </p>
         </section>
 
         <section className="demo-section">

@@ -5,7 +5,10 @@
 👉 Démo en ligne : **https://weejo6.github.io/rdv/**
 
 L'app est une démo de présentation : tout tourne dans le navigateur, avec des habitants et des
-événements simulés autour de Grenoble (Parc Paul Mistral, Bastille, Col de la Croix de Fer…).
+événements simulés **autour de ta position**, placés sur les vrais lieux de ton quartier (parcs, terrains,
+places, bars, cinémas, sommets, lacs…) trouvés dans OpenStreetMap.
+Si la géolocalisation est refusée, la démo se déroule à Grenoble, avec des lieux choisis à la main
+(Parc Paul Mistral, Bastille, Col de la Croix de Fer…).
 
 ---
 
@@ -46,7 +49,7 @@ Astuce : **clic droit (ou appui long) sur la carte** pour créer un RDV à cet e
 - Panneau **« Démo »** : avancer le temps (+15 min, +1 h, +1 jour), accélérer l'horloge (x60, x600),
   sauter directement à J-1 / H-1 / au début de ton prochain RDV pour montrer les confirmations et l'annulation automatique,
   déclencher manuellement des inscriptions, désinscriptions et lives, réinitialiser la démo.
-- Hors de Grenoble, l'app peut générer des RDV fictifs autour de ta vraie position.
+- Position : « Ma position » (par défaut) ou « Grenoble » (lieux faits main), dans le panneau Démo.
 
 Les données (dont les photos et vidéos) sont sauvegardées dans le navigateur (IndexedDB).
 
@@ -68,7 +71,7 @@ Les données (dont les photos et vidéos) sont sauvegardées dans le navigateur 
 
 - [React 19](https://react.dev) + TypeScript, build avec [Vite](https://vite.dev)
 - [Leaflet](https://leafletjs.com) / [react-leaflet](https://react-leaflet.js.org) + tuiles [OpenStreetMap](https://www.openstreetmap.org)
-- Géocodage : [Nominatim](https://nominatim.org) (OpenStreetMap)
+- Lieux et géocodage : [Photon](https://photon.komoot.io) et [Nominatim](https://nominatim.org) (données OpenStreetMap, sans clé d'API)
 - État : [Zustand](https://zustand-demo.pmnd.rs), persistance IndexedDB via [idb-keyval](https://github.com/jakearchibald/idb-keyval)
 - Icônes : [Lucide](https://lucide.dev) · Tests : [Vitest](https://vitest.dev)
 - Déploiement automatique sur GitHub Pages à chaque push sur `main` (GitHub Actions)

@@ -79,6 +79,8 @@ export interface RdvEvent {
   media: MediaItem[];
   /** Comportement simulé des organisateurs fictifs. */
   sim?: { willCancel?: 'j1' | 'h1' };
+  /** RDV « à toi » fourni par la démo (et non créé par toi). */
+  demoSeed?: boolean;
 }
 
 export type NotifKind =

@@ -25,7 +25,9 @@ import {
   regularsFor,
   seedWorld,
   welcomeNotifs,
+  type SeedContext,
 } from '../lib/seed';
+import { fetchPlacePool, type PlacePool } from '../lib/places';
 import { DEFAULT_FILTERS, matchesFilters } from '../lib/selectors';
 import { isActive, isFull, isJoined, isMine, phaseOf, remainingSpots, takenCount, timing } from '../lib/status';
 import { plural, quoted } from '../lib/text';
@@ -73,8 +75,12 @@ interface PersistedState {
   simOffset: number;
   me: { name: string };
   myPos: Place;
-  posMode: 'demo' | 'real';
-  geoAsked: boolean;
+  /** 'auto' : suit la géolocalisation (par défaut) · 'demo' : Grenoble forcé. */
+  posMode: 'auto' | 'demo';
+  /** Centre autour duquel les RDV simulés ont été générés. */
+  seedCenter: LatLng | null;
+  /** Vrais lieux (OpenStreetMap) autour de la position, hors Grenoble. */
+  placePool: PlacePool | null;
   introSeen: boolean;
   events: Record<string, RdvEvent>;
   notifs: Notif[];
@@ -92,6 +98,8 @@ interface UiState {
   createPreset: LatLng | null;
   flyTarget: FlyTarget | null;
   locating: boolean;
+  /** Génération des RDV autour de la position en cours. */
+  seeding: boolean;
 }
 
 interface Actions {
@@ -134,12 +142,31 @@ interface Actions {
   resetDemo: () => void;
 
   // Position
-  initGeolocation: () => void;
+  /** Au démarrage : géolocalise puis génère les RDV autour de toi (Grenoble en secours). */
+  bootstrap: () => void;
   useRealPosition: () => void;
   useDemoPosition: () => void;
-  ensureContentAround: (p: LatLng) => void;
-  reseed: (center: LatLng) => void;
+  /** Génère les RDV simulés autour d'un point (avec les vrais lieux alentour). */
+  reseedAt: (center: LatLng, opts?: { full?: boolean }) => Promise<void>;
 }
+
+/** Au-delà de cette distance, on régénère les RDV autour de la nouvelle position. */
+const RESEED_DISTANCE_KM = 15;
+
+/** Position actuelle (null si refusée / indisponible). */
+function requestPosition(highAccuracy = false): Promise<LatLng | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: highAccuracy, timeout: 12_000, maximumAge: 5 * 60_000 },
+    );
+  });
+}
+
+/** Évite qu'une génération ancienne écrase une plus récente. */
+let seedToken = 0;
 
 export type StoreState = PersistedState & UiState & Actions;
 
@@ -181,18 +208,27 @@ export const useStore = create<StoreState>()(
         set((s) => ({ toasts: [...s.toasts, { ...t, id }].slice(-4) }));
       };
 
+      /** Contexte de génération : ta position + les vrais lieux alentour si on les a. */
+      const seedCtx = (): SeedContext => {
+        const s = get();
+        const pool = s.placePool && distanceKm(s.placePool.center, s.myPos) < 5 ? s.placePool.places : null;
+        return { center: s.myPos, pool };
+      };
+
       /** Après un saut dans le temps, on regarnit la carte (sans notifications). */
       const replenish = () => {
         const s = get();
+        if (s.seeding) return;
         const now = nowSim();
         const open = Object.values(s.events).filter(
           (e) => !isMine(e) && isActive(e, now) && !isFull(e) && distanceKm(s.myPos, e.place) < 25,
         );
         const lives = open.filter((e) => e.kind === 'live').length;
         const planned = open.length - lives;
+        const ctx = seedCtx();
         const added: RdvEvent[] = [];
-        for (let i = lives; i < 4; i++) added.push(makeLiveEvent(s.myPos, now));
-        for (let i = planned; i < 14; i++) added.push(makePlannedEvent(s.myPos, now));
+        for (let i = lives; i < 4; i++) added.push(makeLiveEvent(ctx, now));
+        for (let i = planned; i < 14; i++) added.push(makePlannedEvent(ctx, now));
         if (added.length) set((st) => ({ events: { ...st.events, ...Object.fromEntries(added.map((e) => [e.id, e])) } }));
       };
 
@@ -208,8 +244,9 @@ export const useStore = create<StoreState>()(
         simOffset: 0,
         me: { name: 'Jo' },
         myPos: DEMO_HOME,
-        posMode: 'demo',
-        geoAsked: false,
+        posMode: 'auto',
+        seedCenter: null,
+        placePool: null,
         introSeen: false,
         events: {},
         notifs: [],
@@ -226,15 +263,16 @@ export const useStore = create<StoreState>()(
         createPreset: null,
         flyTarget: null,
         locating: false,
+        seeding: false,
 
         afterHydrate: () => {
           const s = get();
           const real = Date.now();
           const stale = !s.seededAt || real - s.seededAt > 12 * HOUR || Object.keys(s.events).length === 0;
           set({ clock: { anchorReal: real, anchorSim: stale ? real : real + (s.simOffset || 0), speed: 1 } });
-          if (stale) get().reseed(s.myPos);
           useNow.setState({ now: nowSim() });
           set({ hydrated: true });
+          get().bootstrap();
         },
 
         nowSim,
@@ -770,8 +808,8 @@ export const useStore = create<StoreState>()(
           const lives = Object.values(s.events).filter(
             (e) => e.kind === 'live' && !isMine(e) && isActive(e, now) && !isFull(e),
           );
-          if (!force && lives.length >= 7) return;
-          const e = makeLiveEvent(s.myPos, now);
+          if (s.seeding || (!force && lives.length >= 7)) return;
+          const e = makeLiveEvent(seedCtx(), now);
           patchEvent(e);
           const dist = fmtDistance(distanceKm(s.myPos, e.place));
           const missing = remainingSpots(e);
@@ -798,8 +836,8 @@ export const useStore = create<StoreState>()(
           const planned = Object.values(s.events).filter(
             (e) => e.kind !== 'live' && !isMine(e) && isActive(e, now) && !isFull(e) && distanceKm(s.myPos, e.place) < 25,
           );
-          if (planned.length >= 18) return;
-          patchEvent(makePlannedEvent(s.myPos, now));
+          if (s.seeding || planned.length >= 18) return;
+          patchEvent(makePlannedEvent(seedCtx(), now));
         },
 
         jump: (ms) => setClock({ anchorReal: Date.now(), anchorSim: nowSim() + ms, speed: get().clock.speed }),
@@ -809,13 +847,8 @@ export const useStore = create<StoreState>()(
 
         resetDemo: () => {
           const real = Date.now();
-          const center = get().myPos;
-          const events = seedWorld(center, real, { includeMine: true });
           set({
             clock: { anchorReal: real, anchorSim: real, speed: 1 },
-            events,
-            notifs: welcomeNotifs(events, real),
-            seededAt: real,
             filters: DEFAULT_FILTERS,
             selectedId: null,
             panel: null,
@@ -823,92 +856,130 @@ export const useStore = create<StoreState>()(
             toasts: [],
           });
           useNow.setState({ now: real });
+          const center = get().myPos;
           get().flyTo(center, 14);
-          toast({ tone: 'info', title: 'Démo réinitialisée', body: 'Nouveaux RDV générés autour de toi.' });
+          void get()
+            .reseedAt(center, { full: true })
+            .then(() => toast({ tone: 'info', title: 'Démo réinitialisée', body: 'Nouveaux RDV générés autour de toi.' }));
         },
 
         // ——————————————————— Position ———————————————————
 
-        initGeolocation: () => {
-          if (get().geoAsked || typeof navigator === 'undefined' || !navigator.geolocation) return;
-          set({ geoAsked: true });
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-              if (isNearGrenoble(p)) {
-                set({ myPos: { ...p, label: 'Ma position' }, posMode: 'real' });
-                get().flyTo(p, 15);
-                toast({ tone: 'info', title: '📍 Position détectée', body: 'Voici les RDV autour de toi.' });
-              } else {
-                toast({
-                  tone: 'info',
-                  title: 'Démo centrée sur Grenoble',
-                  body: 'Tu sembles loin de Grenoble. Ouvre le panneau « Démo » pour générer des RDV autour de toi.',
-                });
+        bootstrap: () => {
+          const s = get();
+          const stale = !s.seededAt || Date.now() - s.seededAt > 12 * HOUR || Object.keys(s.events).length === 0;
+
+          if (s.posMode === 'demo') {
+            if (stale) void get().reseedAt(DEMO_HOME);
+            return;
+          }
+
+          if (stale) set({ seeding: true });
+          let seeded = false;
+          // Sans réponse (fenêtre d'autorisation ignorée…), on n'attend pas indéfiniment.
+          const fallback = setTimeout(() => {
+            if (stale && !seeded) {
+              seeded = true;
+              void get().reseedAt(get().myPos);
+            }
+          }, 12_000);
+
+          void requestPosition().then(async (p) => {
+            clearTimeout(fallback);
+            if (!p) {
+              if (stale && !seeded) {
+                seeded = true;
+                await get().reseedAt(get().myPos);
+                if (!get().introSeen || get().myPos === DEMO_HOME) {
+                  toast({
+                    tone: 'info',
+                    title: 'Position non disponible',
+                    body: 'La démo se déroule autour de Grenoble. Autorise la géolocalisation pour voir des RDV autour de toi.',
+                  });
+                }
               }
-            },
-            () => {},
-            { timeout: 10_000, maximumAge: 10 * MIN },
-          );
+              return;
+            }
+            const cur = get();
+            set({ myPos: { ...p, label: 'Ma position' } });
+            const center = cur.seedCenter;
+            const moved = !center || distanceKm(center, p) > RESEED_DISTANCE_KM;
+            if ((stale && !seeded) || moved) {
+              seeded = true;
+              await get().reseedAt(p);
+              if (moved && center) toast({ tone: 'info', title: '📍 Nouvelle position', body: 'Des RDV ont été générés autour de toi.' });
+            }
+            get().flyTo(p, 14);
+          });
+        },
+
+        reseedAt: async (center, opts) => {
+          const token = ++seedToken;
+          set({ seeding: true });
+
+          // Vrais lieux autour du point (hors Grenoble, qui a ses lieux faits main).
+          let pool = get().placePool;
+          if (!isNearGrenoble(center) && (!pool || distanceKm(pool.center, center) > 3)) {
+            pool = (await fetchPlacePool(center)) ?? pool;
+          }
+          if (token !== seedToken) return;
+
+          const s = get();
+          const now = nowSim();
+          const usablePool = pool && distanceKm(pool.center, center) < 5 ? pool.places : null;
+          // On garde les RDV que tu as créés, et tes RDV / inscriptions du coin ; le reste est régénéré.
+          const keep = (e: RdvEvent) =>
+            (isMine(e) && !e.demoSeed) || ((isMine(e) || isJoined(e)) && distanceKm(center, e.place) < 50);
+          const kept = opts?.full ? {} : Object.fromEntries(Object.entries(s.events).filter(([, e]) => keep(e)));
+          const hasDemoMine = Object.values(kept).some((e) => e.demoSeed && isActive(e, now));
+          const fresh = seedWorld({ center, pool: usablePool }, now, { includeMine: !hasDemoMine });
+          const events = { ...fresh, ...kept };
+          set({
+            events,
+            placePool: pool,
+            seedCenter: { lat: center.lat, lng: center.lng },
+            seededAt: Date.now(),
+            seeding: false,
+            notifs: opts?.full || !s.notifs.length ? welcomeNotifs(events, now) : s.notifs,
+          });
         },
 
         useRealPosition: () => {
-          if (typeof navigator === 'undefined' || !navigator.geolocation) {
-            toast({ tone: 'danger', title: 'Géolocalisation indisponible sur ce navigateur' });
-            return;
-          }
           set({ locating: true });
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const p: Place = { lat: pos.coords.latitude, lng: pos.coords.longitude, label: 'Ma position' };
-              set({ myPos: p, posMode: 'real', locating: false });
-              get().ensureContentAround(p);
-              get().flyTo(p, 14);
-              toast({ tone: 'success', title: '📍 Position mise à jour' });
-            },
-            (err) => {
+          void requestPosition(true).then(async (p) => {
+            if (!p) {
               set({ locating: false });
               toast({
                 tone: 'danger',
                 title: 'Géolocalisation impossible',
-                body: err.code === 1 ? 'Autorise l’accès à ta position dans le navigateur.' : 'Position indisponible pour le moment.',
+                body: 'Autorise l’accès à ta position dans le navigateur, puis réessaie.',
               });
-            },
-            { enableHighAccuracy: true, timeout: 12_000 },
-          );
+              return;
+            }
+            const prev = get().seedCenter;
+            set({ myPos: { ...p, label: 'Ma position' }, posMode: 'auto' });
+            get().flyTo(p, 14);
+            if (!prev || distanceKm(prev, p) > RESEED_DISTANCE_KM) {
+              await get().reseedAt(p);
+              toast({ tone: 'success', title: '📍 RDV générés autour de toi', body: 'Avec les vrais lieux de ton quartier.' });
+            } else {
+              toast({ tone: 'success', title: '📍 Position mise à jour' });
+            }
+            set({ locating: false });
+          });
         },
 
         useDemoPosition: () => {
+          const prev = get().seedCenter;
           set({ myPos: DEMO_HOME, posMode: 'demo' });
-          get().ensureContentAround(DEMO_HOME);
           get().flyTo(DEMO_HOME, 14);
-        },
-
-        ensureContentAround: (p) => {
-          const now = nowSim();
-          const near = Object.values(get().events).filter(
-            (e) => !isMine(e) && isActive(e, now) && distanceKm(p, e.place) < 15,
-          ).length;
-          if (near >= 6) return;
-          get().reseed(p);
-          toast({ tone: 'info', title: 'RDV générés autour de toi', body: 'La démo a créé des événements fictifs dans ton quartier.' });
-        },
-
-        reseed: (center) => {
-          const now = nowSim();
-          const s = get();
-          // On garde tes RDV et ceux auxquels tu es inscrit ; le reste est régénéré.
-          const kept = Object.fromEntries(Object.entries(s.events).filter(([, e]) => isMine(e) || isJoined(e)));
-          const hasActiveMine = Object.values(kept).some((e) => isMine(e) && isActive(e, now));
-          const fresh = seedWorld(center, now, { includeMine: !hasActiveMine });
-          const events = { ...fresh, ...kept };
-          set({ events, seededAt: Date.now(), notifs: s.notifs.length ? s.notifs : welcomeNotifs(events, now) });
+          if (!prev || distanceKm(prev, DEMO_HOME) > RESEED_DISTANCE_KM) void get().reseedAt(DEMO_HOME);
         },
       };
     },
     {
       name: 'rdv-demo',
-      version: 1,
+      version: 2,
       storage: createIdbStorage<PersistedState>(),
       partialize: (s): PersistedState => ({
         seededAt: s.seededAt,
@@ -916,15 +987,23 @@ export const useStore = create<StoreState>()(
         me: s.me,
         myPos: s.myPos,
         posMode: s.posMode,
-        geoAsked: s.geoAsked,
+        seedCenter: s.seedCenter,
+        placePool: s.placePool,
         introSeen: s.introSeen,
         events: s.events,
         notifs: s.notifs,
         simEnabled: s.simEnabled,
         filters: s.filters,
       }),
-      // Ancienne version de données : on repart d'une démo neuve.
-      migrate: () => ({}) as PersistedState,
+      // Ancienne version : on garde le prénom et l'accueil, et on repart d'une démo neuve
+      // (géolocalisée par défaut).
+      migrate: (persisted) => {
+        const old = (persisted ?? {}) as Partial<PersistedState>;
+        const kept: Partial<PersistedState> = {};
+        if (old.me) kept.me = old.me;
+        if (old.introSeen) kept.introSeen = old.introSeen;
+        return kept as PersistedState;
+      },
       onRehydrateStorage: () => (state) => {
         (state ?? useStore.getState()).afterHydrate();
       },

@@ -40,8 +40,6 @@ export function useSimulation() {
     loop(() => st().spawnLive(), 40_000, 75_000, 15_000);
     loop(() => st().spawnPlanned(), 30_000, 50_000);
 
-    st().initGeolocation();
-
     return () => {
       alive = false;
       clearInterval(tickId);
