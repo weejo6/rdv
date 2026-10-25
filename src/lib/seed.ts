@@ -1,6 +1,6 @@
 import type { CategoryId, EventKind, LatLng, Notif, Place, RdvEvent, Recurrence } from '../types';
 import { PEOPLE } from './people';
-import { DAY, HOUR, MIN, startOfDay } from './time';
+import { DAY, HOUR, MIN } from './time';
 import { distanceKm, jitter, randomAround } from './geo';
 import { chance, pick, randInt, shuffle, uid } from './random';
 import { timing } from './status';
@@ -446,8 +446,16 @@ export function makePlannedEvent(center: LatLng, now: number): RdvEvent {
   const organizerId = pick(PEOPLE).id;
   const sims = pickParticipants(randInt(0, Math.floor((capacity - present) / 2)), [organizerId]);
   const hour = pick([10, 12, 14, 15, 18, 19, 20]);
-  let startAt = startOfDay(now) + randInt(0, 5) * DAY + hour * HOUR;
-  if (startAt < now + 2 * HOUR) startAt += DAY;
+  // setDate / setHours (et non des journées de 24 h fixes) pour rester juste lors des changements d'heure.
+  const at = (days: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + days);
+    d.setHours(hour, 0, 0, 0);
+    return d.getTime();
+  };
+  const offset = randInt(0, 5);
+  let startAt = at(offset);
+  if (startAt < now + 2 * HOUR) startAt = at(offset + 1);
   const e: RdvEvent = {
     id: uid('e'),
     kind: tpl.kind,

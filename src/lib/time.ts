@@ -104,6 +104,7 @@ export const fmtHour = (time: string) => time.replace(':', 'h');
 /**
  * Début de la séance en cours ou de la prochaine séance d'un événement régulier.
  * `skip` permet d'ignorer les séances annulées.
+ * Renvoie `Infinity` s'il n'y a plus aucune séance (valeur stable, traitée comme « terminé »).
  */
 export function occurrenceFor(
   rec: Recurrence,
@@ -112,7 +113,8 @@ export function occurrenceFor(
   skip?: (start: number) => boolean,
 ): number {
   const [h, m] = rec.time.split(':').map(Number);
-  for (let d = -1; d <= 28; d++) {
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return Infinity;
+  for (let d = -1; d <= 400; d++) {
     const day = new Date(now);
     day.setDate(day.getDate() + d);
     day.setHours(h, m, 0, 0);
@@ -122,8 +124,10 @@ export function occurrenceFor(
     if (skip?.(start)) continue;
     return start;
   }
-  return now + DAY;
+  return Infinity;
 }
+
+export const isValidTime = (time: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
 
 export function toDateInput(ts: number) {
   const d = new Date(ts);

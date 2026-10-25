@@ -19,6 +19,10 @@ export function createIdbStorage<S>(): PersistStorage<S> {
 
   if (typeof window !== 'undefined') {
     window.addEventListener('pagehide', flush);
+    // Plus fiable sur mobile : on sauvegarde dès que l'onglet passe en arrière-plan.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
   }
 
   return {

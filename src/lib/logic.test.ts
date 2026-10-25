@@ -47,6 +47,24 @@ describe('occurrenceFor', () => {
     expect(new Date(start).getDate()).toBe(1); // dimanche 1er novembre
   });
 
+  it('trouve encore une séance après plusieurs annulations', () => {
+    const rec = { weekdays: [0], time: '14:00' };
+    const cancelled = new Set<number>();
+    let s = occurrenceFor(rec, 120, SUNDAY_10H);
+    for (let i = 0; i < 8; i++) {
+      cancelled.add(s);
+      s = occurrenceFor(rec, 120, SUNDAY_10H, (x) => cancelled.has(x));
+    }
+    expect(Number.isFinite(s)).toBe(true);
+    expect(Math.round((s - SUNDAY_10H) / DAY)).toBe(56);
+  });
+
+  it('renvoie une valeur stable si l’heure est invalide', () => {
+    const e = base({ kind: 'regular', recurrence: { weekdays: [0], time: '' } });
+    expect(occurrenceFor({ weekdays: [0], time: '' }, 120, SUNDAY_10H)).toBe(Infinity);
+    expect(phaseOf(e, SUNDAY_10H)).toBe('ended');
+  });
+
   it('ignore les séances annulées', () => {
     const first = occurrenceFor({ weekdays: [0], time: '14:00' }, 120, SUNDAY_10H);
     const next = occurrenceFor({ weekdays: [0], time: '14:00' }, 120, SUNDAY_10H, (s) => s === first);

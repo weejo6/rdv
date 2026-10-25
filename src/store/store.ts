@@ -280,11 +280,43 @@ export const useStore = create<StoreState>()(
             }
 
             const t = timing(e, now);
+            // Régulier sans plus aucune séance : rien à planifier.
+            if (!Number.isFinite(t.start)) continue;
 
             // Nouvelle séance d'un événement régulier : les inscriptions repartent (sauf la tienne).
             if (e.kind === 'regular' && e.occurrenceKey !== t.start) {
+              let occMap = e.occ;
+              // Saut dans le temps par-dessus une séance dont la confirmation était en attente :
+              // sans réponse, cette séance est annulée automatiquement.
+              if (mine && e.occurrenceKey !== undefined && e.occurrenceKey < t.start) {
+                const prevKey = String(e.occurrenceKey);
+                const prev = e.occ[prevKey];
+                if (prev && !prev.cancelled && (prev.j1 === 'pending' || prev.h1 === 'pending')) {
+                  occMap = {
+                    ...e.occ,
+                    [prevKey]: {
+                      ...prev,
+                      j1: prev.j1 === 'pending' ? 'expired' : prev.j1,
+                      h1: prev.h1 === 'pending' ? 'expired' : prev.h1,
+                      cancelled: 'no-response',
+                    },
+                  };
+                  notifs.push({
+                    kind: 'cancel',
+                    title: `La séance de ${label} (${fmtDay(e.occurrenceKey, now).toLowerCase()} ${fmtTime(e.occurrenceKey)}) a été annulée automatiquement`,
+                    body: "Tu n'as pas répondu à la demande de confirmation.",
+                    eventId: e.id,
+                  });
+                }
+              }
               const fresh = mine ? [] : regularsFor(e);
-              e = { ...e, occurrenceKey: t.start, participants: joined ? ['me', ...fresh] : fresh, fullAt: undefined };
+              e = {
+                ...e,
+                occ: occMap,
+                occurrenceKey: t.start,
+                participants: joined ? ['me', ...fresh] : fresh,
+                fullAt: undefined,
+              };
               put(e);
             }
 
@@ -865,10 +897,11 @@ export const useStore = create<StoreState>()(
         reseed: (center) => {
           const now = nowSim();
           const s = get();
-          const mineEvents = Object.fromEntries(Object.entries(s.events).filter(([, e]) => isMine(e)));
-          const hasActiveMine = Object.values(mineEvents).some((e) => isActive(e, now));
+          // On garde tes RDV et ceux auxquels tu es inscrit ; le reste est régénéré.
+          const kept = Object.fromEntries(Object.entries(s.events).filter(([, e]) => isMine(e) || isJoined(e)));
+          const hasActiveMine = Object.values(kept).some((e) => isMine(e) && isActive(e, now));
           const fresh = seedWorld(center, now, { includeMine: !hasActiveMine });
-          const events = { ...fresh, ...mineEvents };
+          const events = { ...fresh, ...kept };
           set({ events, seededAt: Date.now(), notifs: s.notifs.length ? s.notifs : welcomeNotifs(events, now) });
         },
       };

@@ -72,7 +72,7 @@ export function EventDetails({ id }: { id: string }) {
   const occ = e.occ[occKey];
   const pendingStage = mine && active ? (occ?.h1 === 'pending' ? 'h1' : occ?.j1 === 'pending' ? 'j1' : null) : null;
   const color = KINDS[kind].color;
-  const nextLabel = `${fmtDay(t.start, now).toLowerCase()} ${fmtTime(t.start)}`;
+  const nextLabel = Number.isFinite(t.start) ? `${fmtDay(t.start, now).toLowerCase()} ${fmtTime(t.start)}` : '';
   const otherPresent = Math.max(0, e.alreadyPresent - 1);
 
   return (

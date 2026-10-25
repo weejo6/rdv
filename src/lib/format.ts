@@ -31,6 +31,7 @@ export function whenLong(e: RdvEvent, now: number): { line: string; sub: string 
   if (e.kind === 'regular' && e.recurrence) {
     const line = `${fmtWeekdays(e.recurrence.weekdays)} à ${fmtHour(e.recurrence.time)} (${fmtDuration(e.durationMin)})`;
     if (ph === 'cancelled') return { line, sub: 'Événement régulier annulé' };
+    if (ph === 'ended') return { line, sub: 'Plus aucune séance prévue' };
     if (ph === 'live') return { line, sub: `Séance en cours · jusqu'à ${fmtTime(t.end)}` };
     return {
       line,

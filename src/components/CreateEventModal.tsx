@@ -4,7 +4,7 @@ import type { CategoryId, EventKind, MediaItem, Place } from '../types';
 import { useStore } from '../store/store';
 import { useNow } from '../store/now';
 import { CATEGORIES, CATEGORY_ORDER, KINDS, KIND_ORDER } from '../lib/categories';
-import { DAY, WD_ABBR, WEEK_ORDER, fmtDay, fmtDuration, fmtWeekdays, toDateInput } from '../lib/time';
+import { DAY, WD_ABBR, WEEK_ORDER, fmtDay, fmtDuration, fmtWeekdays, isValidTime, toDateInput } from '../lib/time';
 import { plural } from '../lib/text';
 import { uid } from '../lib/random';
 import { LocationPicker } from './LocationPicker';
@@ -56,7 +56,9 @@ export function CreateEventModal() {
         ? 'Choisis une date et une heure dans le futur.'
         : kind === 'regular' && !weekdays.length
           ? 'Choisis au moins un jour.'
-          : null,
+          : kind === 'regular' && !isValidTime(time)
+            ? 'Indique une heure.'
+            : null,
   };
   const valid = !errors.title && !errors.place && !errors.when;
   const show = (msg: string | null) => (submitted ? msg : null);
@@ -82,7 +84,10 @@ export function CreateEventModal() {
     ev.preventDefault();
     setSubmitted(true);
     if (!valid) {
-      document.querySelector('.modal .is-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Après le rendu qui affiche les erreurs.
+      requestAnimationFrame(() =>
+        document.querySelector('.modal .is-error, .modal .error')?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      );
       return;
     }
     createEvent({
@@ -261,7 +266,8 @@ export function CreateEventModal() {
                   />
                 </div>
                 <p className={show(errors.when) ? 'error' : 'hint'}>
-                  {weekdays.length ? `${fmtWeekdays(weekdays)} à ${time.replace(':', 'h')}` : 'Choisis au moins un jour.'}
+                  {show(errors.when) ??
+                    (weekdays.length ? `${fmtWeekdays(weekdays)} à ${time.replace(':', 'h')}` : 'Choisis au moins un jour.')}
                 </p>
               </>
             )}

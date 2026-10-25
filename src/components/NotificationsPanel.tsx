@@ -41,9 +41,10 @@ export function NotificationsPanel() {
   const freshIds = useRef<Set<string>>(new Set(notifs.filter((n) => !n.read).map((n) => n.id)));
 
   useEffect(() => {
+    if (!notifs.some((n) => !n.read)) return;
     const t = setTimeout(markAllRead, 800);
     return () => clearTimeout(t);
-  }, [notifs.length, markAllRead]);
+  }, [notifs, markAllRead]);
 
   useEffect(() => {
     notifs.forEach((n) => !n.read && freshIds.current.add(n.id));

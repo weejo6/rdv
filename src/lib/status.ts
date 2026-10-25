@@ -22,6 +22,7 @@ export type Phase = 'upcoming' | 'live' | 'ended' | 'cancelled';
 export function phaseOf(e: RdvEvent, now: number): Phase {
   if (e.cancelled) return 'cancelled';
   const t = timing(e, now);
+  if (!Number.isFinite(t.start)) return 'ended';
   if (now < t.start) return 'upcoming';
   if (now < t.end) return 'live';
   return 'ended';

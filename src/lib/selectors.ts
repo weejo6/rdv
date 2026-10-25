@@ -39,7 +39,8 @@ export function mapItems(
     if (!isActive(e, now)) continue;
     let leaving = false;
     if (isFull(e)) {
-      if (e.fullAt && realNow - e.fullAt < LEAVE_ANIMATION_MS) leaving = true;
+      // realNow = 0 : pas d'animation (listes, compteurs) → les complets sont simplement exclus.
+      if (realNow > 0 && e.fullAt && realNow - e.fullAt < LEAVE_ANIMATION_MS) leaving = true;
       else continue;
     }
     if (!matchesFilters(e, f, myPos, now)) continue;
