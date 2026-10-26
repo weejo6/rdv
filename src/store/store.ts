@@ -28,6 +28,7 @@ import {
   type SeedContext,
 } from '../lib/seed';
 import { fetchPlacePool, type PoolPlace } from '../lib/places';
+import { ambientMessage, chatMembers, greeting, replyTo, unreadCount } from '../lib/chat';
 import { REGIONS, guessRegion, parseRegion, regionInCity, type RegionId } from '../lib/regions';
 
 /** Ville de démo par défaut : Montréal pour un navigateur au Québec / en Ontario, sinon Grenoble. */
@@ -48,6 +49,8 @@ export interface Toast {
   title: string;
   body?: string;
   eventId?: string;
+  /** Message de discussion : « Répondre » ouvre la discussion. */
+  chat?: boolean;
 }
 
 export interface FlyTarget extends LatLng {
@@ -106,6 +109,8 @@ interface UiState {
   seeding: boolean;
   /** Zone affichée par la carte. */
   view: MapViewState | null;
+  /** Discussion du RDV sélectionné ouverte. */
+  chatOpen: boolean;
 }
 
 /** Zone peuplée de RDV simulés. */
@@ -153,6 +158,14 @@ interface Actions {
   setSimEnabled: (on: boolean) => void;
   simJoin: (targetId?: string) => void;
   simLeave: (force?: boolean) => void;
+  /** Un participant écrit spontanément dans la discussion d'un de tes RDV. */
+  simChat: () => void;
+
+  // Discussion
+  openChat: (id: string) => void;
+  closeChat: () => void;
+  sendMessage: (id: string, text: string) => void;
+  markChatRead: (id: string) => void;
   spawnLive: (force?: boolean) => void;
   spawnPlanned: () => void;
   jump: (ms: number) => void;
@@ -228,6 +241,24 @@ export const useStore = create<StoreState>()(
       const toast = (t: ToastInput) => {
         const id = uid('t');
         set((s) => ({ toasts: [...s.toasts, { ...t, id }].slice(-4) }));
+      };
+
+      /** Ajoute un message dans la discussion d'un RDV (et prévient si elle n'est pas ouverte). */
+      const postChat = (eventId: string, from: string, text: string) => {
+        const e = get().events[eventId];
+        if (!e) return;
+        const now = nowSim();
+        const s = get();
+        const reading = s.chatOpen && s.selectedId === eventId;
+        patchEvent({
+          ...e,
+          chat: [...(e.chat ?? []), { id: uid('c'), from, text, at: now }],
+          chatReadAt: reading ? now : e.chatReadAt,
+        });
+        if (reading) return;
+        const who = `${firstNameOf(from)}${from === e.organizerId ? ' (orga)' : ''}`;
+        notify([{ kind: 'message', title: `${who} · ${e.title}`, body: text, eventId, personId: from }], now);
+        toast({ tone: 'info', title: `💬 ${who} · ${e.title}`, body: text, eventId, chat: true });
       };
 
       // ——————————————————— Zones de démo ———————————————————
@@ -332,6 +363,7 @@ export const useStore = create<StoreState>()(
         locating: false,
         seeding: false,
         view: null,
+        chatOpen: false,
 
         afterHydrate: () => {
           const s = get();
@@ -575,14 +607,55 @@ export const useStore = create<StoreState>()(
         // ——————————————————— Interface ———————————————————
 
         select: (id, opts) => {
-          set({ selectedId: id });
+          set({ selectedId: id, chatOpen: false });
           if (id && opts?.fly) {
             const e = get().events[id];
             if (e) get().flyTo(e.place, undefined, true);
           }
         },
-        togglePanel: (p) => set((s) => ({ panel: s.panel === p && !s.selectedId ? null : p, selectedId: null })),
-        closeDrawer: () => set({ panel: null, selectedId: null }),
+        togglePanel: (p) =>
+          set((s) => ({ panel: s.panel === p && !s.selectedId ? null : p, selectedId: null, chatOpen: false })),
+        closeDrawer: () => set({ panel: null, selectedId: null, chatOpen: false }),
+
+        // ——————————————————— Discussion ———————————————————
+
+        openChat: (id) => {
+          set({ selectedId: id, chatOpen: true });
+          get().markChatRead(id);
+        },
+        closeChat: () => set({ chatOpen: false }),
+        markChatRead: (id) => {
+          const e = get().events[id];
+          if (e && unreadCount(e) > 0) patchEvent({ ...e, chatReadAt: nowSim() });
+        },
+        sendMessage: (id, text) => {
+          const e = get().events[id];
+          const body = text.trim();
+          if (!e || !body || !(isMine(e) || isJoined(e))) return;
+          const now = nowSim();
+          patchEvent({ ...e, chat: [...(e.chat ?? []), { id: uid('c'), from: 'me', text: body, at: now }], chatReadAt: now });
+          if (!get().simEnabled) return;
+          // Quelqu'un répond au bout de quelques secondes (parfois deux personnes).
+          const answer = (delay: number, follow: boolean) =>
+            setTimeout(() => {
+              const cur = get().events[id];
+              if (!cur) return;
+              const r = follow ? ambientMessage(cur) : replyTo(body, cur, nowSim(), get().me.name);
+              if (r) postChat(id, r.from, r.text);
+            }, delay);
+          answer(rand(2000, 4500), false);
+          if (chance(0.3)) answer(rand(7000, 12000), true);
+        },
+        simChat: () => {
+          const now = nowSim();
+          const mineOrJoined = Object.values(get().events).filter(
+            (e) => (isMine(e) || isJoined(e)) && isActive(e, now) && chatMembers(e).length > 0,
+          );
+          if (!mineOrJoined.length) return;
+          const e = pick(mineOrJoined);
+          const r = ambientMessage(e);
+          if (r) postChat(e.id, r.from, r.text);
+        },
         openCreate: (preset) => set({ createOpen: true, createPreset: preset ?? null }),
         closeCreate: () => set({ createOpen: false, createPreset: null }),
         flyTo: (p, zoom, offset) =>
@@ -684,9 +757,7 @@ export const useStore = create<StoreState>()(
             setTimeout(() => {
               const cur = get().events[id];
               if (!cur || !isJoined(cur)) return;
-              const msg = pick(WELCOME_MESSAGES);
-              notify([{ kind: 'message', title: `${firstNameOf(org)} (orga) · ${cur.title}`, body: msg, eventId: id, personId: org }]);
-              toast({ tone: 'info', title: `💬 ${firstNameOf(org)}`, body: msg, eventId: id });
+              postChat(id, org, pick(WELCOME_MESSAGES));
             }, rand(2500, 5000));
           }
         },
@@ -803,6 +874,7 @@ export const useStore = create<StoreState>()(
           patchEvent(updated);
 
           const label = quoted(e.title);
+          if (isMine(e) && chance(0.35)) setTimeout(() => postChat(e.id, person.id, greeting()), rand(1500, 4000));
           if (isMine(e)) {
             const rem = remainingSpots(updated);
             notify([
@@ -1095,7 +1167,7 @@ export const useStore = create<StoreState>()(
     },
     {
       name: 'rdv-demo',
-      version: 4,
+      version: 5,
       storage: createIdbStorage<PersistedState>(),
       partialize: (s): PersistedState => ({
         seededAt: s.seededAt,

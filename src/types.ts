@@ -83,6 +83,18 @@ export interface RdvEvent {
   demoSeed?: boolean;
   /** Zone de démo qui a généré ce RDV (absent pour les RDV que tu crées). */
   areaId?: string;
+  /** Discussion entre participants. */
+  chat?: ChatMessage[];
+  /** Dernière lecture de la discussion par toi (heure simulée). */
+  chatReadAt?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  /** 'me' ou l'id d'une personne simulée. */
+  from: string;
+  text: string;
+  at: number;
 }
 
 export type NotifKind =

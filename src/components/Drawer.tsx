@@ -1,4 +1,5 @@
 import { useStore } from '../store/store';
+import { ChatPanel } from './ChatPanel';
 import { DemoPanel } from './DemoPanel';
 import { EventDetails } from './EventDetails';
 import { ListPanel } from './ListPanel';
@@ -9,10 +10,17 @@ import { NotificationsPanel } from './NotificationsPanel';
 export function Drawer() {
   const panel = useStore((s) => s.panel);
   const selectedId = useStore((s) => s.selectedId);
+  const chatOpen = useStore((s) => s.chatOpen);
   if (!panel && !selectedId) return null;
+  const chat = !!selectedId && chatOpen;
   return (
-    <aside className={`drawer${selectedId ? ' drawer--details' : ' drawer--panel'}`} key={selectedId ? 'details' : panel}>
-      {selectedId ? (
+    <aside
+      className={`drawer${selectedId && !chat ? ' drawer--details' : ' drawer--panel'}`}
+      key={chat ? 'chat' : selectedId ? 'details' : panel}
+    >
+      {chat ? (
+        <ChatPanel id={selectedId!} />
+      ) : selectedId ? (
         <EventDetails id={selectedId} />
       ) : panel === 'list' ? (
         <ListPanel />

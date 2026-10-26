@@ -6,6 +6,7 @@ import { chance, pick, randInt, shuffle, uid } from './random';
 import { timing } from './status';
 import { plural, quoted } from './text';
 import { pickFromPool, type PoolPlace, type SpotKind } from './places';
+import { initialChat } from './chat';
 import { GRENOBLE_REGION, regionAround, regionInCity, type LiveTpl, type Region, type SeedTpl, type When } from './regions';
 
 /**
@@ -135,6 +136,7 @@ function buildSeed(
     demoSeed: tpl.mine || undefined,
   };
   if (e.kind === 'regular') e.occurrenceKey = timing(e, now).start;
+  e.chat = initialChat(e, now);
   return e;
 }
 
@@ -324,6 +326,7 @@ export function makePlannedEvent(ctx: SeedContext, now: number): RdvEvent {
     media: [],
   };
   if (e.kind === 'regular') e.occurrenceKey = timing(e, now).start;
+  e.chat = initialChat(e, now);
   return e;
 }
 

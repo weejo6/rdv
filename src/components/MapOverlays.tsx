@@ -121,6 +121,7 @@ export function Toasts() {
 function ToastItem({ t }: { t: Toast }) {
   const dismiss = useStore((s) => s.dismissToast);
   const select = useStore((s) => s.select);
+  const openChat = useStore((s) => s.openChat);
   const exists = useStore((s) => (t.eventId ? !!s.events[t.eventId] : false));
   useEffect(() => {
     const id = setTimeout(() => dismiss(t.id), 6000);
@@ -142,10 +143,11 @@ function ToastItem({ t }: { t: Toast }) {
           className="toast__action"
           onClick={() => {
             select(t.eventId!, { fly: true });
+            if (t.chat) openChat(t.eventId!);
             dismiss(t.id);
           }}
         >
-          Voir
+          {t.chat ? 'Répondre' : 'Voir'}
         </button>
       )}
       <button type="button" className="toast__close" onClick={() => dismiss(t.id)} aria-label="Fermer">

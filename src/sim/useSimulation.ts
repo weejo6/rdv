@@ -39,6 +39,7 @@ export function useSimulation() {
     loop(() => chance(0.7) && st().simLeave(), 35_000, 65_000, 30_000);
     loop(() => st().spawnLive(), 40_000, 75_000, 15_000);
     loop(() => st().spawnPlanned(), 30_000, 50_000);
+    loop(() => chance(0.6) && st().simChat(), 45_000, 90_000, 40_000);
 
     return () => {
       alive = false;

@@ -74,6 +74,7 @@ function NotifItem({ n, fresh }: { n: Notif; fresh: boolean }) {
   const now = useNow((s) => s.now);
   const select = useStore((s) => s.select);
   const respondConfirm = useStore((s) => s.respondConfirm);
+  const openChat = useStore((s) => s.openChat);
   const event = useStore((s) => (n.eventId ? s.events[n.eventId] : undefined));
   const { icon: Icon, color } = ICONS[n.kind];
 
@@ -84,7 +85,11 @@ function NotifItem({ n, fresh }: { n: Notif; fresh: boolean }) {
     <div
       className={`notif${fresh ? ' is-new' : ''}${event ? ' is-link' : ''}`}
       style={cssVars({ '--c': color })}
-      onClick={() => event && select(event.id, { fly: true })}
+      onClick={() => {
+        if (!event) return;
+        select(event.id, { fly: true });
+        if (n.kind === 'message') openChat(event.id);
+      }}
     >
       {n.personId ? (
         <span className="notif__avatar">

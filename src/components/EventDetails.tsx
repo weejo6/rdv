@@ -5,7 +5,10 @@ import {
   CalendarDays,
   Check,
   ChevronLeft,
+  ChevronRight,
   CircleAlert,
+  Lock,
+  MessageCircle,
   MapPin,
   Navigation,
   PartyPopper,
@@ -25,6 +28,7 @@ import { displayKind, isFull, isJoined, isMine, phaseOf, remainingSpots, takenCo
 import { plural } from '../lib/text';
 import { fmtDay, fmtTime } from '../lib/time';
 import { Avatar, KindBadge, MediaView, cssVars } from './ui';
+import { senderName, unreadCount } from '../lib/chat';
 
 type Confirming = null | 'leave' | 'cancel' | 'cancel-series';
 
@@ -196,6 +200,8 @@ export function EventDetails({ id }: { id: string }) {
             </div>
           )}
 
+          {active || e.chat?.length ? <ChatEntry id={e.id} /> : null}
+
           <ul className="info">
             <li>
               <span className="info__icon">
@@ -346,6 +352,36 @@ export function EventDetails({ id }: { id: string }) {
         </footer>
       )}
     </div>
+  );
+}
+
+/** Accès à la discussion du RDV (réservée aux inscrits et à l'organisateur). */
+function ChatEntry({ id }: { id: string }) {
+  const e = useStore((s) => s.events[id]);
+  const meName = useStore((s) => s.me.name);
+  const openChat = useStore((s) => s.openChat);
+  if (!e) return null;
+  const allowed = isMine(e) || isJoined(e);
+  const last = e.chat?.[e.chat.length - 1];
+  const unread = unreadCount(e);
+  return (
+    <button type="button" className={`chat-entry${allowed ? '' : ' is-locked'}`} onClick={() => openChat(e.id)}>
+      <span className="chat-entry__icon">{allowed ? <MessageCircle size={20} /> : <Lock size={18} />}</span>
+      <span className="chat-entry__text">
+        <b>
+          Discussion{e.chat?.length ? ` · ${plural(e.chat.length, 'message')}` : ''}
+        </b>
+        <span>
+          {!allowed
+            ? 'Réservée aux participants : inscris-toi pour échanger'
+            : last
+              ? `${senderName(last.from, meName)} : ${last.text}`
+              : 'Pose une question ou dis bonjour aux participants'}
+        </span>
+      </span>
+      {allowed && unread > 0 && <span className="chat-entry__badge">{unread}</span>}
+      <ChevronRight size={18} className="chat-entry__chevron" />
+    </button>
   );
 }
 

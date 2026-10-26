@@ -118,7 +118,14 @@ function MapController({ drawerOpen }: { drawerOpen: boolean }) {
       const pt = map.project(target, zoom).add([0, window.innerHeight * 0.28]);
       target = map.unproject(pt, zoom);
     }
-    map.flyTo(target, zoom, { duration: 0.8 });
+    // Carte pas encore dimensionnée (onglet masqué…) : l'animation donnerait des coordonnées invalides.
+    const size = map.getSize();
+    try {
+      if (!size.x || !size.y || !Number.isFinite(target.lat)) map.setView([flyTarget.lat, flyTarget.lng], zoom, { animate: false });
+      else map.flyTo(target, zoom, { duration: 0.8 });
+    } catch {
+      map.setView([flyTarget.lat, flyTarget.lng], zoom, { animate: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyTarget?.key]);
 
